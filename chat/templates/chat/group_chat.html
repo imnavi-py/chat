@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Chat</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #e9ecef;
+        }
+        #chat-log {
+            border: 2px solid #007bff;
+            height: 500px;
+            overflow-y: scroll;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+        #chat-message-input {
+            width: 80%;
+            border-radius: 5px;
+        }
+        #chat-file-input {
+            margin-left: 10px;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 5px;
+            border-bottom: 1px solid #dcdcdc;
+        }
+        .input-group {
+            margin-top: 20px;
+        }
+        h1 {
+            color: #007bff;
+            font-weight: bold;
+        }
+        .logout-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 10px;
+            font-weight: bold;
+        }
+        .logout-btn:hover {
+            background-color: #c82333;
+        }
+
+        .back-btn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 10px;
+            font-weight: bold;
+        }
+        .back-btn:hover {
+            background-color: #c82333;
+        }
+        .avatar {
+            border-radius: 50px;
+        }
+    </style>
+</head>
+<body class="container mt-4">
+    <!-- دکمه خروج -->
+    <a href="{% url 'logout' %}" class="logout-btn">خروج</a>
+
+    <!-- عنوان گروه -->
+    <h1 class="text-center">{{ group.name }}</h1>
+
+    <a href="{% url 'index' %}" class="back-btn">برگشت</a>
+
+    <!-- پنل چت -->
+    <div id="chat-log" class="mb-3">
+        {% for message in messages %}
+            <div class="message">
+                <img src="{{ message.user.userprofile.avatar.url }}" alt="Avatar" class="avatar" width="40" height="40">
+                <strong>{{ message.user.username }}:</strong> {{ message.content }} <br>
+                <small>{{ message.timestamp }}</small>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- ورودی پیام و فایل -->
+    <div class="input-group">
+        <input id="chat-message-input" type="text" class="form-control" placeholder="پیام خود را وارد کنید...">
+        <input id="chat-file-input" type="file" class="ml-2">
+        <div class="input-group-append">
+            <button id="chat-message-submit" class="btn btn-primary">ارسال</button>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <script>
+        const groupName = "{{ group.name }}";
+        const chatSocket = new WebSocket(
+            'ws://' + window.location.host + '/ws/chat/' + groupName + '/'
+        );
+
+        chatSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            const chatLog = document.querySelector('#chat-log');
+            if (data.message) {
+                const currentTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Tehran' });
+                chatLog.innerHTML += `<div class="message"><img src="${data.avatar_url}" alt="Avatar" class="avatar" width="40" height="40"> <strong>${data.user}:</strong> ${data.message} <br><small>${currentTime}</small></div>`;
+            }
+
+            if (data.file) {
+                chatLog.innerHTML += `<div class="message"><strong>${data.user}:</strong> <a href="${data.file}">${data.filename}</a></div>`;
+            }
+            chatLog.scrollTop = chatLog.scrollHeight; // Scroll to the bottom
+        };
+
+        document.querySelector('#chat-message-input').focus();
+        document.querySelector('#chat-message-input').onkeyup = function(e) {
+            if (e.keyCode === 13) {  // Enter key
+                document.querySelector('#chat-message-submit').click();
+            }
+        };
+
+        document.querySelector('#chat-message-submit').onclick = function(e) {
+            const messageInputDom = document.querySelector('#chat-message-input');
+            const message = messageInputDom.value;
+            if (message) {
+                const currentTime = new Date().toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' });
+                chatSocket.send(JSON.stringify({'message': message, 'timestamp': currentTime}));
+                messageInputDom.value = '';
+            }
+        };
+
+        document.querySelector('#chat-file-input').onchange = function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                chatSocket.send(JSON.stringify({
+                    'file': event.target.result,
+                    'filename': file.name,
+                }));
+            };
+            reader.readAsDataURL(file);
+        };
+    </script>
+</body>
+</html>

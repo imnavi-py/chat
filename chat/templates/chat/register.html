@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f8f9fa;
+        }
+        .register-card {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+        .register-card h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #28a745;
+        }
+        .form-group {
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="register-card">
+        <h1>ثبت نام</h1>
+
+        <!-- فرم ثبت نام -->
+        <form method="post">
+            {% csrf_token %}
+            {{ form.non_field_errors }} <!-- نمایش خطاهای کلی فرم -->
+            
+            <div class="form-group">
+                <label for="username">:نام کاربری</label>
+                {{ form.username }}  <!-- نمایش فیلد نام کاربری -->
+                {{ form.username.errors }}  <!-- نمایش خطاهای فیلد نام کاربری (در صورت وجود) -->
+            </div>
+
+            <div class="form-group">
+                <label for="email">:ایمیل</label>
+                {{ form.email }}  <!-- نمایش فیلد ایمیل -->
+                {{ form.email.errors }}  <!-- نمایش خطاهای فیلد ایمیل (در صورت وجود) -->
+            </div>
+
+            <div class="form-group">
+                <label for="password">:رمز عبور</label>
+                {{ form.password }}  <!-- نمایش فیلد رمز عبور -->
+                {{ form.password.errors }}  <!-- نمایش خطاهای فیلد رمز عبور (در صورت وجود) -->
+            </div>
+
+            <button type="submit" class="btn btn-success btn-block">ثبت نام</button>
+        </form>
+
+        <!-- لینک ورود به حساب -->
+        <div class="mt-3 text-center">
+            <p>حساب دارید؟ <a href="{% url 'login' %}">وارد شوید</a></p>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+</body>
+</html>

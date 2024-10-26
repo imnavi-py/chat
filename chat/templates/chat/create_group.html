@@ -1,0 +1,6 @@
+<form method="POST">
+    {% csrf_token %}
+    <label for="group-name-input">Group name:</label>
+    <input id="group-name-input" type="text" name="group_name" required>
+    <button type="submit">Create Group</button>
+</form>
