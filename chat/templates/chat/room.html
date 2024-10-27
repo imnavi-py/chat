@@ -13,9 +13,9 @@
     
     
     <script>
-        const groupName = "{{ group.name }}";
+        const groupSlug = "{{ group.slug }}";
         const chatSocket = new WebSocket(
-            'ws://' + window.location.host + '/ws/chat/' + groupName + '/'
+            'ws://' + window.location.host + '/ws/chat/' + groupSlug + '/'
         );
 
         chatSocket.onmessage = function(e) {

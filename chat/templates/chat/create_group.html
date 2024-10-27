@@ -1,6 +1,63 @@
-<form method="POST">
-    {% csrf_token %}
-    <label for="group-name-input">Group name:</label>
-    <input id="group-name-input" type="text" name="group_name" required>
-    <button type="submit">Create Group</button>
-</form>
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ایجاد گروه</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        /* استایل پاپ‌آپ */
+        .popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #ffffff;
+            border: 2px solid #dc3545;
+            padding: 20px;
+            z-index: 1000;
+            border-radius: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="container mt-4">
+
+    <h1 class="text-center">ایجاد گروه جدید</h1>
+
+    <!-- فرم ایجاد گروه -->
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="group_name">نام گروه:</label>
+            <input type="text" class="form-control" name="group_name" required>
+        </div>
+        <div class="form-group"></div>
+            <label for="slug">نامک گروه:</label>
+            <input type="text" class="form-control" name="slug" required placeholder="فقط حروف انگلیسی و عدد">
+        </div>
+        <div class="form-group">
+            <label for="type">نوع گروه:</label>
+            <select class="form-control" name="type" required>
+                <option value="public">عمومی</option>
+                <option value="private">خصوصی</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">ایجاد گروه</button>
+    </form>
+
+    {% if error_message %}
+        <div class="popup">
+            <p>{{ error_message }}</p>
+            <button onclick="this.parentElement.style.display='none';" class="btn btn-danger">بستن</button>
+        </div>
+    {% endif %}
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+</body>
+</html>

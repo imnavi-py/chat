@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Group Chat</title>
+    {% load static %} <!-- بارگذاری تگ static -->
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
@@ -70,6 +71,30 @@
         .avatar {
             border-radius: 50px;
         }
+        #member-list {
+            border: 2px solid #007bff;
+            border-radius: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            height: 500px;
+            overflow-y: auto;
+        }
+        .popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #ffffff;
+            border: 2px solid #007bff;
+            padding: 20px;
+            z-index: 1000;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .popup button {
+            margin: 5px;
+            padding: 10px;
+        }
     </style>
 </head>
 <body class="container mt-4">
@@ -81,23 +106,70 @@
 
     <a href="{% url 'index' %}" class="back-btn">برگشت</a>
 
-    <!-- پنل چت -->
-    <div id="chat-log" class="mb-3">
-        {% for message in messages %}
-            <div class="message">
-                <img src="{{ message.user.userprofile.avatar.url }}" alt="Avatar" class="avatar" width="40" height="40">
-                <strong>{{ message.user.username }}:</strong> {{ message.content }} <br>
-                <small>{{ message.timestamp }}</small>
+    <div class="row">
+        <!-- پنل چت -->
+        <div class="col-md-8">
+            <div id="chat-log" class="mb-3">
+                {% for message in messages %}
+                    <div class="message">
+                        {% if message.user.userprofile.avatar %}
+                        <a href="{% url 'private_chat' username=message.user.username %}">
+                            <img src="{{ message.user.userprofile.avatar.url }}" alt="Avatar" class="avatar" width="40" height="40">
+                        </a>
+                    {% else %}
+                        <a href="{% url 'private_chat' username=message.user.username %}">
+                            <img src="{% static 'profiles/default.png' %}" alt="Default Avatar" class="avatar" width="40" height="40">
+                        </a>
+                    {% endif %}
+                    <strong>
+                        <a href="{% url 'private_chat' username=message.user.username %}">
+                            {{ message.user.username }}
+                        </a>:
+                    </strong>
+                    {{ message.content }} <br>
+                    <small>{{ message.timestamp }}</small>
+                    </div>
+                {% endfor %}
             </div>
-        {% endfor %}
-    </div>
 
-    <!-- ورودی پیام و فایل -->
-    <div class="input-group">
-        <input id="chat-message-input" type="text" class="form-control" placeholder="پیام خود را وارد کنید...">
-        <input id="chat-file-input" type="file" class="ml-2">
-        <div class="input-group-append">
-            <button id="chat-message-submit" class="btn btn-primary">ارسال</button>
+            <!-- ورودی پیام و فایل -->
+            <div class="input-group">
+                <input id="chat-message-input" type="text" class="form-control" placeholder="پیام خود را وارد کنید...">
+                <input id="chat-file-input" type="file" class="ml-2">
+                <div class="input-group-append">
+                    <button id="chat-message-submit" class="btn btn-primary">ارسال</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- لیست اعضا -->
+        <div class="col-md-4">
+            <h4>اعضا</h4>
+            <ul id="member-list" class="list-group">
+                {% for user in members %}
+                <li class="list-group-item">
+                    {% if user.userprofile.avatar %}
+                        <img src="{{ user.userprofile.avatar.url }}" alt="Avatar" class="avatar" width="30" height="30">
+                    {% else %}
+                        <img src="{% static 'profiles/default.png' %}" alt="Default Avatar" class="avatar" width="30" height="30">
+                    {% endif %}
+                    {{ user.username }}
+                </li>
+                {% endfor %}
+            </ul>
+            <!-- فرم اضافه کردن عضو جدید -->
+            <h5 class="mt-4">اضافه کردن عضو جدید</h5>
+            <form method="post" action="{% url 'group_chat' group.slug  %}">
+                {% csrf_token %}
+                <div class="form-group">
+                    <select name="username" class="form-control">
+                        {% for user in all_users %}
+                            <option value="{{ user.username }}">{{ user.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" name="add_member" class="btn btn-success btn-block">افزودن</button>
+            </form>
         </div>
     </div>
 
@@ -107,23 +179,51 @@
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 
     <script>
-        const groupName = "{{ group.name }}";
+        const groupSlug = "{{ group.slug }}";
         const chatSocket = new WebSocket(
-            'ws://' + window.location.host + '/ws/chat/' + groupName + '/'
+            'ws://' + window.location.host + '/ws/chat/' + groupSlug + '/'
         );
 
         chatSocket.onmessage = function(e) {
             const data = JSON.parse(e.data);
             const chatLog = document.querySelector('#chat-log');
+            
             if (data.message) {
                 const currentTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Tehran' });
-                chatLog.innerHTML += `<div class="message"><img src="${data.avatar_url}" alt="Avatar" class="avatar" width="40" height="40"> <strong>${data.user}:</strong> ${data.message} <br><small>${currentTime}</small></div>`;
+                const newMessage = document.createElement('div');
+                newMessage.classList.add('message');
+                newMessage.innerHTML = `
+                    <img src="${data.avatar_url}" alt="Avatar" class="avatar" width="40" height="40">
+                    <strong class="username" data-username="${data.user}">${data.user}:</strong> ${data.message} <br>
+                    <small>${currentTime}</small>
+                `;
+                chatLog.appendChild(newMessage);
+                
+                // Scroll to the bottom
+                chatLog.scrollTop = chatLog.scrollHeight;
+
+                // اضافه کردن کلیک برای ورود به چت خصوصی
+                const usernameElement = newMessage.querySelector('.username');
+                usernameElement.addEventListener('click', function() {
+                    const username = this.getAttribute('data-username');
+                    window.location.href = `/chat/private/${username}/`;
+                });
             }
 
             if (data.file) {
-                chatLog.innerHTML += `<div class="message"><strong>${data.user}:</strong> <a href="${data.file}">${data.filename}</a></div>`;
+                const newFileMessage = document.createElement('div');
+                newFileMessage.classList.add('message');
+                newFileMessage.innerHTML = `
+                    <strong>${data.user}:</strong> <a href="${data.file}">${data.filename}</a>
+                `;
+                chatLog.appendChild(newFileMessage);
+                chatLog.scrollTop = chatLog.scrollHeight;
             }
-            chatLog.scrollTop = chatLog.scrollHeight; // Scroll to the bottom
+
+            // نمایش پاپ‌آپ برای پیام خصوصی
+            if (data.private_message) {
+                showPrivateMessagePopup(data.sender);
+            }
         };
 
         document.querySelector('#chat-message-input').focus();
@@ -136,24 +236,38 @@
         document.querySelector('#chat-message-submit').onclick = function(e) {
             const messageInputDom = document.querySelector('#chat-message-input');
             const message = messageInputDom.value;
+            const fileInput = document.querySelector('#chat-file-input');
+
             if (message) {
-                const currentTime = new Date().toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' });
-                chatSocket.send(JSON.stringify({'message': message, 'timestamp': currentTime}));
+                chatSocket.send(JSON.stringify({
+                    'message': message,
+                    'file': fileInput.files.length ? fileInput.files[0] : null
+                }));
                 messageInputDom.value = '';
             }
         };
 
-        document.querySelector('#chat-file-input').onchange = function(e) {
-            const file = e.target.files[0];
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                chatSocket.send(JSON.stringify({
-                    'file': event.target.result,
-                    'filename': file.name,
-                }));
-            };
-            reader.readAsDataURL(file);
-        };
+        function showPrivateMessagePopup(sender) {
+            const popup = document.createElement('div');
+            popup.className = 'popup';
+            popup.innerHTML = `
+                <h5>پیام خصوصی از ${sender}</h5>
+                <button onclick="acceptPrivateChat('${sender}')">قبول</button>
+                <button onclick="rejectPrivateChat()">رد</button>
+            `;
+            document.body.appendChild(popup);
+        }
+
+        function acceptPrivateChat(sender) {
+            window.location.href = `/chat/private/${sender}/`;
+        }
+
+        function rejectPrivateChat() {
+            const popup = document.querySelector('.popup');
+            if (popup) {
+                document.body.removeChild(popup);
+            }
+        }
     </script>
 </body>
 </html>

@@ -2,11 +2,22 @@ from django.conf import settings
 from django.db import models
 from django.contrib.auth.models import User
 from django.contrib.auth.models import AbstractUser
+from django.utils.text import slugify
+
 
 
 class Group(models.Model):
     name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=100, unique=True)  # نامک گروه
+    type = models.CharField(max_length=10, choices=[('public', 'عمومی'), ('private', 'خصوصی')])
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='group_members')  # تغییر `related_name`
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    def save(self, *args, **kwargs):
+        # ایجاد نامک از نام گروه
+        if not self.slug:
+            self.slug = slugify(self.name)  # یا می‌توانی از یک روش دیگری برای تولید نامک استفاده کنی
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name

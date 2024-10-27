@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
-from .models import UserProfile
+from .models import Group, UserProfile
 
 from django import forms
 
@@ -66,3 +66,16 @@ class UserProfileForm(forms.ModelForm):
     class Meta:
         model = UserProfile
         fields = ['first_name', 'last_name', 'avatar']
+
+
+class GroupSearchForm(forms.Form):
+    search_term = forms.CharField(label='جستجوی گروه', max_length=100)
+
+
+class GroupForm(forms.ModelForm):
+    class Meta:
+        model = Group
+        fields = ['name', 'slug', 'type']  # نام، نامک و نوع گروه
+        widgets = {
+            'slug': forms.TextInput(attrs={'placeholder': 'Slug (only in English characters)'}),
+        }
