@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Private Chat</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body class="container mt-4">
+    <div id="chat-log" class="mb-3"></div>
+    
+    <input id="recipient-id" type="text" placeholder="Enter recipient's username">
+    <button id="invite-button" class="btn btn-primary">Send Invite</button>
+
+    <script>
+        const username = "{{ username }}";  // Assuming this variable is set in your Django view
+        const chatSocket = new WebSocket(
+            'ws://' + window.location.host + '/ws/chat/private/' + username + '/'
+        );
+
+        chatSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            if (data.type === 'invite') {
+                const accept = confirm(`${data.sender} has invited you to a private chat. Do you accept?`);
+                if (accept) {
+                    chatSocket.send(JSON.stringify({ 'type': 'accept', 'recipient': data.sender }));
+                    // Redirect to private chat page if necessary
+                }
+            }
+        };
+
+        document.querySelector('#invite-button').onclick = function(e) {
+            const recipient = document.querySelector('#recipient-id').value;
+            chatSocket.send(JSON.stringify({ 'type': 'invite', 'recipient': recipient }));
+        };
+    </script>
+</body>
+</html>

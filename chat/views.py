@@ -1,4 +1,6 @@
+import json
 from django.db import IntegrityError
+from django.http import JsonResponse
 from django.shortcuts import render
 from django.contrib.auth.forms import UserCreationForm
 from django.shortcuts import render
@@ -18,6 +20,10 @@ from django.shortcuts import redirect
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.models import User
 from django.db.models import Q
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+
+
 
 
 # @login_required(login_url = 'chat/login.html')
@@ -94,21 +100,18 @@ def delete_group(request, group_slug):
 
 @login_required
 def group_chat(request, slug):
-    # group = get_object_or_404(Group, name=group_name)
     group = get_object_or_404(Group, slug=slug)
     messages = Message.objects.filter(group=group).order_by('timestamp')
-    members = group.members.all()  # اعضای گروه
-    all_users = User.objects.exclude(id__in=members.values_list('id', flat=True))  # کاربران بدون عضو بودن در گروه
+    members = group.members.all()
+    all_users = User.objects.exclude(id__in=members.values_list('id', flat=True))
 
     # اضافه کردن کاربر جدید
     if request.method == 'POST' and 'add_member' in request.POST:
         username = request.POST.get('username')
         user_to_add = User.objects.get(username=username)
         group.members.add(user_to_add)
-        # return redirect('group_chat', group_name=group_name)
         return redirect('group_chat', slug=slug)
 
-    # افزودن پروفایل کاربر برای استفاده در HTML
     user_profile = UserProfile.objects.get(user=request.user)
 
     return render(request, 'chat/group_chat.html', {
@@ -116,7 +119,7 @@ def group_chat(request, slug):
         'messages': messages,
         'members': members,
         'all_users': all_users,
-        'user_profile': user_profile,  # ارسال پروفایل کاربر به قالب
+        'user_profile': user_profile,
     })
 
 
@@ -184,5 +187,15 @@ def profile_view(request):
 def chat_view(request, group_name):
     return render(request, 'chat.html', {'group_name': group_name})
 
-def private_chat(request, username):
-    return render(request, 'chat/private_chat.html', {'username': username})
+@login_required
+def private_chat_view(request, username):
+    user_to_chat = get_object_or_404(User, username=username)
+    return render(request, 'chat/private_chat.html', {'user_to_chat': user_to_chat})
+
+
+
+
+
+ 
+
+

@@ -126,9 +126,14 @@
                             {{ message.user.username }}
                         </a>:
                     </strong>
-                    {{ message.content }} <br>
+                    {% if message.file %}
+                        <a href="{{ message.file.url }}">{{ message.file.name }}</a> <!-- لینک به فایل -->
+                    {% else %}
+                        {{ message.content }}
+                    {% endif %}
+                    <br>
                     <small>{{ message.timestamp }}</small>
-                    </div>
+                </div>
                 {% endfor %}
             </div>
 
@@ -138,6 +143,14 @@
                 <input id="chat-file-input" type="file" class="ml-2">
                 <div class="input-group-append">
                     <button id="chat-message-submit" class="btn btn-primary">ارسال</button>
+                    <button id="emoji-button">😊</button>
+                    <div id="emoji-list" style="display:none;">
+                        <span class="emoji" data-emoji="😊">😊</span>
+                        <span class="emoji" data-emoji="😂">😂</span>
+                        <span class="emoji" data-emoji="😍">😍</span>
+                        <span class="emoji" data-emoji="😢">😢</span>
+                        <!-- اموجی‌های بیشتر -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -219,11 +232,7 @@
                 chatLog.appendChild(newFileMessage);
                 chatLog.scrollTop = chatLog.scrollHeight;
             }
-
-            // نمایش پاپ‌آپ برای پیام خصوصی
-            if (data.private_message) {
-                showPrivateMessagePopup(data.sender);
-            }
+    
         };
 
         document.querySelector('#chat-message-input').focus();
@@ -238,36 +247,78 @@
             const message = messageInputDom.value;
             const fileInput = document.querySelector('#chat-file-input');
 
-            if (message) {
-                chatSocket.send(JSON.stringify({
+            if (message || (fileInput.files.length > 0)) {
+                const dataToSend = {
                     'message': message,
-                    'file': fileInput.files.length ? fileInput.files[0] : null
-                }));
+                };
+
+                if (fileInput.files.length > 0) {
+                    const file = fileInput.files[0];
+                    const reader = new FileReader();
+
+                    reader.onloadend = function() {
+                        dataToSend.file = reader.result; // base64 encoded file
+                        dataToSend.filename = file.name; // send filename
+
+                        chatSocket.send(JSON.stringify(dataToSend));
+                    };
+
+                    reader.readAsDataURL(file); // Convert the file to base64
+                } else {
+                    chatSocket.send(JSON.stringify(dataToSend));
+                }
+
                 messageInputDom.value = '';
+                fileInput.value = ''; // Clear file input
             }
         };
 
-        function showPrivateMessagePopup(sender) {
-            const popup = document.createElement('div');
-            popup.className = 'popup';
-            popup.innerHTML = `
-                <h5>پیام خصوصی از ${sender}</h5>
-                <button onclick="acceptPrivateChat('${sender}')">قبول</button>
-                <button onclick="rejectPrivateChat()">رد</button>
-            `;
-            document.body.appendChild(popup);
-        }
+        document.querySelector('#chat-file-input').onchange = function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                chatSocket.send(JSON.stringify({
+                    'file': event.target.result,
+                    'filename': file.name,
+                }));
+            };
+            reader.readAsDataURL(file);
+        };
+        function showPrivateChatNotification(sender) {
+        const popup = document.createElement('div');
+        popup.classList.add('popup');
+        popup.innerHTML = `
+            <p>${sender} یک پیام خصوصی برای شما ارسال کرده است.</p>
+            <button id="accept-chat">پذیرش</button>
+            <button id="decline-chat">رد</button>
+        `;
+        document.body.appendChild(popup);
 
-        function acceptPrivateChat(sender) {
+        document.getElementById('accept-chat').onclick = function() {
             window.location.href = `/chat/private/${sender}/`;
-        }
+            document.body.removeChild(popup);
+        };
 
-        function rejectPrivateChat() {
-            const popup = document.querySelector('.popup');
-            if (popup) {
-                document.body.removeChild(popup);
-            }
-        }
+        document.getElementById('decline-chat').onclick = function() {
+            document.body.removeChild(popup);
+        };
+    }
+
+    //emoji
+    document.getElementById('emoji-button').onclick = function() {
+    const emojiList = document.getElementById('emoji-list');
+    emojiList.style.display = emojiList.style.display === 'none' ? 'block' : 'none';
+    };
+
+    const emojis = document.querySelectorAll('.emoji');
+    emojis.forEach(emoji => {
+        emoji.onclick = function() {
+            const messageInput = document.querySelector('#chat-message-input');
+            messageInput.value += emoji.getAttribute('data-emoji'); // افزودن اموجی به ورودی
+            document.getElementById('emoji-list').style.display = 'none'; // بستن لیست اموجی‌ها
+            messageInput.focus(); // فوکوس روی ورودی
+        };
+    });
     </script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Private Chat</title>
+    <title>چت خصوصی با {{ user_to_chat.username }}</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
         body {
@@ -18,55 +18,12 @@
             border-radius: 10px;
             margin-bottom: 10px;
         }
-        #chat-message-input {
-            width: 80%;
-            border-radius: 5px;
-        }
-        .message {
-            margin-bottom: 10px;
-            padding: 5px;
-            border-bottom: 1px solid #dcdcdc;
-        }
-        .input-group {
-            margin-top: 20px;
-        }
-        h1 {
-            color: #007bff;
-            font-weight: bold;
-        }
-        .avatar {
-            border-radius: 50px;
-        }
-        .back-btn {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background-color: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            padding: 5px 10px;
-            font-weight: bold;
-        }
-        .back-btn:hover {
-            background-color: #c82333;
-        }
+        /* سایر استایل‌ها */
     </style>
 </head>
 <body class="container mt-4">
-    <a href="{% url 'index' %}" class="back-btn">بازگشت</a>
-    <h1 class="text-center">چت خصوصی با {{ username }}</h1>
-
-    <div id="chat-log" class="mb-3">
-        {% for message in messages %}
-            <div class="message">
-                <img src="{{ message.user.userprofile.avatar.url }}" alt="Avatar" class="avatar" width="40" height="40">
-                <strong>{{ message.user.username }}:</strong> {{ message.content }} <br>
-                <small>{{ message.timestamp }}</small>
-            </div>
-        {% endfor %}
-    </div>
-
+    <h1 class="text-center">چت خصوصی با {{ user_to_chat.username }}</h1>
+    <div id="chat-log" class="mb-3"></div>
     <div class="input-group">
         <input id="chat-message-input" type="text" class="form-control" placeholder="پیام خود را وارد کنید...">
         <div class="input-group-append">
@@ -75,33 +32,26 @@
     </div>
 
     <script>
-        const username = "{{ username }}";
         const chatSocket = new WebSocket(
-            'ws://' + window.location.host + '/ws/chat/private/' + username + '/'
+            'ws://' + window.location.host + '/ws/private_chat/{{ user_to_chat.username }}/'
         );
 
         chatSocket.onmessage = function(e) {
             const data = JSON.parse(e.data);
             const chatLog = document.querySelector('#chat-log');
-            if (data.message) {
-                const currentTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Tehran' });
-                chatLog.innerHTML += `<div class="message"><img src="${data.avatar_url}" alt="Avatar" class="avatar" width="40" height="40"> <strong>${data.user}:</strong> ${data.message} <br><small>${currentTime}</small></div>`;
-                chatLog.scrollTop = chatLog.scrollHeight;
-            }
-        };
-
-        document.querySelector('#chat-message-input').focus();
-        document.querySelector('#chat-message-input').onkeyup = function(e) {
-            if (e.keyCode === 13) {  // Enter key
-                document.querySelector('#chat-message-submit').click();
-            }
+            const newMessage = document.createElement('div');
+            newMessage.innerHTML = `<strong>${data.user}:</strong> ${data.message}`;
+            chatLog.appendChild(newMessage);
+            chatLog.scrollTop = chatLog.scrollHeight;
         };
 
         document.querySelector('#chat-message-submit').onclick = function(e) {
             const messageInputDom = document.querySelector('#chat-message-input');
             const message = messageInputDom.value;
             if (message) {
-                chatSocket.send(JSON.stringify({ 'message': message }));
+                chatSocket.send(JSON.stringify({
+                    'message': message,
+                }));
                 messageInputDom.value = '';
             }
         };
