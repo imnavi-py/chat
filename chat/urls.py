@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.urls import path
 from . import views
-from .views import delete_group, login_view, logout_view, private_chat_view,  register_view, profile_view
+from .views import delete_group, login_view, logout_view, private_chat_view,  register_view, profile_view, send_notification
 from django.conf.urls.static import static
 
 urlpatterns = [
@@ -11,11 +11,17 @@ urlpatterns = [
     path('group/<slug:slug>/', views.group_chat, name='group_chat'),  # استفاده از نامک
 
     path('delete_group/<str:group_slug>/', delete_group, name='delete_group'),  # URL برای حذف گروه
-    path('chat/private/<str:username>/', private_chat_view, name='private_chat'),
+    # path('chat/private/<str:username>/', private_chat_view, name='private_chat'),
 
     path('login/', login_view, name='login'),
     path('logout/', logout_view, name='logout'),  # مسیر خروج
     path('register/', register_view, name='register'),
     path('profile/', profile_view, name='profile'),
+    path('chat/private/<str:username>/', views.private_chat, name='private_chat'),
+
+
+
+
+    path('send_notification/<int:user_id>/', send_notification, name='send_notification'),
     
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

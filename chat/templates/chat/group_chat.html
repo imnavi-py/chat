@@ -113,16 +113,16 @@
                 {% for message in messages %}
                     <div class="message">
                         {% if message.user.userprofile.avatar %}
-                        <a href="{% url 'private_chat' username=message.user.username %}">
+                        <!-- <a href="{% url 'private_chat' username=message.user.username %}"> -->
                             <img src="{{ message.user.userprofile.avatar.url }}" alt="Avatar" class="avatar" width="40" height="40">
                         </a>
                     {% else %}
-                        <a href="{% url 'private_chat' username=message.user.username %}">
+                        <!-- <a href="{% url 'private_chat' username=message.user.username %}"> -->
                             <img src="{% static 'profiles/default.png' %}" alt="Default Avatar" class="avatar" width="40" height="40">
                         </a>
                     {% endif %}
                     <strong>
-                        <a href="{% url 'private_chat' username=message.user.username %}">
+                        <!-- <a href="{% url 'private_chat' username=message.user.username %}"> -->
                             {{ message.user.username }}
                         </a>:
                     </strong>
@@ -160,7 +160,7 @@
             <h4>اعضا</h4>
             <ul id="member-list" class="list-group">
                 {% for user in members %}
-                <li class="list-group-item">
+                <li class="list-group-item" data-username="{{ user.username }}" onclick="sendNotification('{{ user.id }}')">
                     {% if user.userprofile.avatar %}
                         <img src="{{ user.userprofile.avatar.url }}" alt="Avatar" class="avatar" width="30" height="30">
                     {% else %}
@@ -215,12 +215,7 @@
                 // Scroll to the bottom
                 chatLog.scrollTop = chatLog.scrollHeight;
 
-                // اضافه کردن کلیک برای ورود به چت خصوصی
-                const usernameElement = newMessage.querySelector('.username');
-                usernameElement.addEventListener('click', function() {
-                    const username = this.getAttribute('data-username');
-                    window.location.href = `/chat/private/${username}/`;
-                });
+                
             }
 
             if (data.file) {
@@ -284,41 +279,97 @@
             };
             reader.readAsDataURL(file);
         };
-        function showPrivateChatNotification(sender) {
-        const popup = document.createElement('div');
-        popup.classList.add('popup');
-        popup.innerHTML = `
-            <p>${sender} یک پیام خصوصی برای شما ارسال کرده است.</p>
-            <button id="accept-chat">پذیرش</button>
-            <button id="decline-chat">رد</button>
-        `;
-        document.body.appendChild(popup);
+        
+    
 
-        document.getElementById('accept-chat').onclick = function() {
-            window.location.href = `/chat/private/${sender}/`;
-            document.body.removeChild(popup);
+        //emoji
+        document.getElementById('emoji-button').onclick = function() {
+        const emojiList = document.getElementById('emoji-list');
+        emojiList.style.display = emojiList.style.display === 'none' ? 'block' : 'none';
         };
 
-        document.getElementById('decline-chat').onclick = function() {
-            document.body.removeChild(popup);
-        };
-    }
+        const emojis = document.querySelectorAll('.emoji');
+        emojis.forEach(emoji => {
+            emoji.onclick = function() {
+                const messageInput = document.querySelector('#chat-message-input');
+                messageInput.value += emoji.getAttribute('data-emoji'); // افزودن اموجی به ورودی
+                document.getElementById('emoji-list').style.display = 'none'; // بستن لیست اموجی‌ها
+                messageInput.focus(); // فوکوس روی ورودی
+            };
+        });
+        //emoji
 
-    //emoji
-    document.getElementById('emoji-button').onclick = function() {
-    const emojiList = document.getElementById('emoji-list');
-    emojiList.style.display = emojiList.style.display === 'none' ? 'block' : 'none';
-    };
+        // کد ارسال اعلان به کاربر هدف
+        const notificationSocket = new WebSocket('ws://localhost:8000/ws/notifications/');
 
-    const emojis = document.querySelectorAll('.emoji');
-    emojis.forEach(emoji => {
-        emoji.onclick = function() {
-            const messageInput = document.querySelector('#chat-message-input');
-            messageInput.value += emoji.getAttribute('data-emoji'); // افزودن اموجی به ورودی
-            document.getElementById('emoji-list').style.display = 'none'; // بستن لیست اموجی‌ها
-            messageInput.focus(); // فوکوس روی ورودی
+        notificationSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            alert(data.message);  // نمایش اعلان
         };
-    });
+
+        // تابع ارسال اعلان
+        // function sendNotification(targetUserId) {
+        //     notificationSocket.send(JSON.stringify({
+        //         'message': `کاربر ${targetUserId} به شما پیام ارسال کرده است!`
+        //     }));
+        // }
+
+        // اضافه کردن event listener به نام کاربری
+        document.querySelectorAll('#member-list .list-group-item').forEach(item => {
+            item.onclick = function() {
+                const targetUserId = this.dataset.username;  // دریافت نام کاربر هدف
+                sendNotification(targetUserId);  // ارسال اعلان
+            };
+        });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        function sendNotification(targetUserId) {
+            fetch(`/send_notification/${targetUserId}/`, {  // Ensure this matches your URL pattern
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'), // To send CSRF token
+                },
+                body: JSON.stringify({}),
+            })
+            .then(response => {
+                if (response.ok) {
+                    console.log('Notification sent successfully');
+                } else {
+                    console.error('Error sending notification');
+                }
+            });
+        }
+
+
+        // تابعی برای دریافت توکن CSRF
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    // بررسی اگر نام کوکی برابر با نام ورودی باشد
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
     </script>
 </body>
 </html>

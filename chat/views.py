@@ -193,9 +193,17 @@ def private_chat_view(request, username):
     return render(request, 'chat/private_chat.html', {'user_to_chat': user_to_chat})
 
 
+def private_chat(request, username):
+    return render(request, 'chat/chat_private.html', {'username': username})
 
 
 
- 
+
+
+def send_notification(request, user_id):
+    if request.method == 'POST':
+        # Process the notification logic here, e.g., send a WebSocket message or save to DB
+        return JsonResponse({'status': 'success', 'message': 'Notification sent.'})
+    return JsonResponse({'status': 'error', 'message': 'Invalid request.'})
 
 

@@ -21,16 +21,19 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.group_slug = self.scope['url_route']['kwargs']['group_slug']
         self.user = self.scope['user']
-
+        
+        # Adding user to the group
         await self.channel_layer.group_add(
             self.group_slug,
-            self.channel_name
+            self.channel_name,
         )
-
+        
+        # Unique channel for the user
+        self.user_channel_name = f"user-{self.user.username}"
+        
         await self.accept()
 
     async def disconnect(self, close_code):
-        # ترک گروه
         await self.channel_layer.group_discard(
             self.group_slug,
             self.channel_name
@@ -41,7 +44,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         
         if 'message' in data:
             message = data['message']
-            timestamp = self.get_current_time()  # دریافت زمان فعلی
+            timestamp = self.get_current_time()
 
             await self.save_message(message, timestamp)
 
@@ -54,7 +57,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                     'message': message,
                     'user': self.user.username,
                     'avatar_url': user_avatar_url,
-                    'timestamp': timestamp,  # ارسال زمان به گروه
+                    'timestamp': timestamp,
                 }
             )
 
@@ -76,6 +79,22 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                     'user': self.user.username,
                 }
             )
+        
+        elif data['type'] == 'private_chat_request':
+                recipient_username = data['recipient']
+                recipient_channel = f"user-{recipient_username}"
+                await self.channel_layer.send(
+                    recipient_channel,
+                    {
+                        'type': 'private_chat_notification',
+                        'sender': self.user.username,
+                        'message': data.get('message', '')
+                    }
+                )
+            
+        elif data['type'] == 'user_click':
+            target_username = data['username']
+            await self.send_notification(target_username)
 
     @database_sync_to_async
     def get_user_avatar(self):
@@ -151,14 +170,50 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
 
         # Return the relative file path for database storage without 'static/files/'
         return f"static/files/{filename}"  # Corrected return value
+    
+
+
+    ## channel pv
+    async def get_channel_for_user(self, username):
+        # این تابع نام کانال مربوط به کاربر را برمی‌گرداند
+        return f"chat-{username}"  # نام کانال کاربر
+    
+
+
+    @database_sync_to_async
+    def send_notification(self, target_username):
+        target_channel = f"user-{target_username}"
+        notification_message = f"{self.user.username} has clicked on your name!"
+
+        # ارسال اعلان به کانال کاربر هدف
+        self.channel_layer.send(
+            target_channel,
+            {
+                'type': 'notification',
+                'message': notification_message,
+                'sender': self.user.username
+            }
+        )
+
+    async def notification(self, event):
+        message = event['message']
+        sender = event['sender']
+
+        # ارسال پیام اعلان به وب‌ساکت
+        await self.send(text_data=json.dumps({
+            'type': 'notification',
+            'message': message,
+            'sender': sender
+        }))
+
 
 
 class PrivateChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.username = self.scope['url_route']['kwargs']['username']
-        self.room_name = f'private_chat_{self.username}'
         self.room_group_name = f'private_chat_{self.username}'
 
+        # اضافه کردن کاربر به گروه
         await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
@@ -167,6 +222,7 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
         await self.accept()
 
     async def disconnect(self, close_code):
+        # حذف کاربر از گروه
         await self.channel_layer.group_discard(
             self.room_group_name,
             self.channel_name
@@ -174,14 +230,13 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data):
         data = json.loads(text_data)
-        message = data['message']
-
+        # مدیریت پیام‌های دریافتی
         await self.channel_layer.group_send(
             self.room_group_name,
             {
                 'type': 'chat_message',
-                'message': message,
-                'user': self.scope['user'].username,
+                'message': data['message'],
+                'user': self.username,
             }
         )
 
@@ -198,8 +253,28 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
 
 
 
+class NotificationConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.user = self.scope['user']
+        self.group_name = f'notification_{self.user.id}'
 
+        # به گروه پیوستن
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+        await self.accept()
 
+    async def disconnect(self, close_code):
+        # از گروه خارج شدن
+        await self.channel_layer.group_discard(
+            self.group_name,
+            self.channel_name
+        )
 
-
-
+    async def send_notification(self, event):
+        message = event['message']
+        # ارسال پیام به کاربر
+        await self.send(text_data=json.dumps({
+            'message': message
+        }))
