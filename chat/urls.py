@@ -1,5 +1,7 @@
 from django.conf import settings
 from django.urls import path
+
+from chat import consumers
 from . import views
 from .views import delete_group, login_view, logout_view, private_chat_view,  register_view, profile_view, send_notification
 from django.conf.urls.static import static
@@ -17,8 +19,9 @@ urlpatterns = [
     path('logout/', logout_view, name='logout'),  # مسیر خروج
     path('register/', register_view, name='register'),
     path('profile/', profile_view, name='profile'),
-    path('chat/private/<str:username>/', views.private_chat, name='private_chat'),
-
+    # path('chat/private/<str:username>/', views.private_chat, name='private_chat'),
+    path('chat/private/<str:target_username>/', views.private_chat_view, name='private_chat'),
+    
 
 
 

@@ -107,10 +107,18 @@ def group_chat(request, slug):
 
     # اضافه کردن کاربر جدید
     if request.method == 'POST' and 'add_member' in request.POST:
-        username = request.POST.get('username')
-        user_to_add = User.objects.get(username=username)
-        group.members.add(user_to_add)
-        return redirect('group_chat', slug=slug)
+        if 'add_member' in request.POST:
+            username = request.POST.get('username')
+            user_to_add = User.objects.get(username=username)
+            group.members.add(user_to_add)
+            return redirect('group_chat', slug=slug)
+    
+        elif 'send_private_message' in request.POST:  # بررسی ارسال پیام خصوصی
+            target_username = request.POST.get('target_username')
+            message = request.POST.get('message')
+            target_user = User.objects.get(username=target_username)
+            send_notification(target_user.id, message, request.user.username)  # ارسال اعلان
+            return redirect('private_chat', target_username=target_username)
 
     user_profile = UserProfile.objects.get(user=request.user)
 
@@ -188,9 +196,14 @@ def chat_view(request, group_name):
     return render(request, 'chat.html', {'group_name': group_name})
 
 @login_required
-def private_chat_view(request, username):
-    user_to_chat = get_object_or_404(User, username=username)
-    return render(request, 'chat/private_chat.html', {'user_to_chat': user_to_chat})
+def private_chat_view(request, target_username):
+    current_username = request.user.username  # نام کاربر فعلی
+    target_user = get_object_or_404(User, username=target_username)  # بررسی وجود کاربر هدف
+    return render(request, 'chat/chat_private.html', {
+        'username': current_username,
+        'target_username': target_username,
+        'target_user': target_user,  # ارسال پروفایل کاربر هدف به قالب
+    })
 
 
 def private_chat(request, username):
@@ -200,10 +213,14 @@ def private_chat(request, username):
 
 
 
-def send_notification(request, user_id):
-    if request.method == 'POST':
-        # Process the notification logic here, e.g., send a WebSocket message or save to DB
-        return JsonResponse({'status': 'success', 'message': 'Notification sent.'})
-    return JsonResponse({'status': 'error', 'message': 'Invalid request.'})
-
+def send_notification(user_id, message, sender):
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.send)(
+        f'private_chat_{user_id}',
+        {
+            'type': 'chat_message',
+            'message': message,
+            'sender': sender,
+        }
+    )
 

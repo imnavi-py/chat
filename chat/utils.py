@@ -1,6 +1,6 @@
 import pytz
 import re
-
+import hashlib
 
 
 
@@ -32,3 +32,11 @@ def convert_to_ascii(group_name):
     # فقط حروف و اعداد و علامت‌های مجاز را نگه داریم
     return re.sub(r'[^a-zA-Z0-9._-]', '', converted_name)
 
+
+
+
+def generate_private_chat_id(user1, user2):
+    # نام کاربری‌ها را مرتب کنید تا اطمینان حاصل کنید که همیشه یک شناسه تولید می‌شود
+    chat_id = ''.join(sorted([user1, user2]))
+    # از hashlib برای تولید یک شناسه منحصر به فرد استفاده کنید
+    return hashlib.sha256(chat_id.encode()).hexdigest()

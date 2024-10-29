@@ -8,7 +8,7 @@ import json
 from channels.db import database_sync_to_async
 from django.conf import settings
 from django.contrib.auth import get_user_model
-
+from asgiref.sync import async_to_sync
 
 
 
@@ -186,7 +186,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         notification_message = f"{self.user.username} has clicked on your name!"
 
         # ارسال اعلان به کانال کاربر هدف
-        self.channel_layer.send(
+        async_to_sync(self.channel_layer.send)(
             target_channel,
             {
                 'type': 'notification',
@@ -213,7 +213,7 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
         self.username = self.scope['url_route']['kwargs']['username']
         self.room_group_name = f'private_chat_{self.username}'
 
-        # اضافه کردن کاربر به گروه
+        # ملحق شدن به گروه
         await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
@@ -222,7 +222,7 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
         await self.accept()
 
     async def disconnect(self, close_code):
-        # حذف کاربر از گروه
+        # Leave room group
         await self.channel_layer.group_discard(
             self.room_group_name,
             self.channel_name
@@ -230,51 +230,32 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data):
         data = json.loads(text_data)
-        # مدیریت پیام‌های دریافتی
+        message = data['message']
+        sender = data['sender']
+        
+        print(f"Received message: {message}")  # این خط برای دیباگینگ اضافه شده است
+        print(f"Sender is: {sender}")
+        
+        # ارسال پیام به گروه
         await self.channel_layer.group_send(
             self.room_group_name,
             {
                 'type': 'chat_message',
-                'message': data['message'],
-                'user': self.username,
+                'message': message,
+                'user': self.username,  # اضافه کردن نام کاربر
+                'sender': sender,
             }
         )
 
     async def chat_message(self, event):
         message = event['message']
-        user = event['user']
+        sender = event['sender']
 
+        # Send message to WebSocket
         await self.send(text_data=json.dumps({
             'message': message,
-            'user': user,
+            'sender': sender,
         }))
 
 
 
-
-
-class NotificationConsumer(AsyncWebsocketConsumer):
-    async def connect(self):
-        self.user = self.scope['user']
-        self.group_name = f'notification_{self.user.id}'
-
-        # به گروه پیوستن
-        await self.channel_layer.group_add(
-            self.group_name,
-            self.channel_name
-        )
-        await self.accept()
-
-    async def disconnect(self, close_code):
-        # از گروه خارج شدن
-        await self.channel_layer.group_discard(
-            self.group_name,
-            self.channel_name
-        )
-
-    async def send_notification(self, event):
-        message = event['message']
-        # ارسال پیام به کاربر
-        await self.send(text_data=json.dumps({
-            'message': message
-        }))
