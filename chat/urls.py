@@ -3,7 +3,7 @@ from django.urls import path
 
 from chat import consumers
 from . import views
-from .views import delete_group, login_view, logout_view, private_chat_view,  register_view, profile_view, send_notification
+from .views import delete_group, login_view, logout_view,   register_view, profile_view
 from django.conf.urls.static import static
 
 urlpatterns = [
@@ -22,9 +22,5 @@ urlpatterns = [
     # path('chat/private/<str:username>/', views.private_chat, name='private_chat'),
     path('chat/private/<str:target_username>/', views.private_chat_view, name='private_chat'),
     
-
-
-
-    path('send_notification/<int:user_id>/', send_notification, name='send_notification'),
     
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

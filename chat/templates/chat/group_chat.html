@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="fa">
 <head>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Group Chat</title>
@@ -198,8 +199,21 @@
             'ws://' + window.location.host + '/ws/chat/' + groupSlug + '/'
         );
 
+        // WebSocket برای اعلان‌ها
+        const username = "{{ request.user.username }}"; // نام کاربری را از Django بگیرید
+        const notificationSocket = new WebSocket(
+            'ws://' + window.location.host + '/ws/notifications/' + username + '/'
+        );
+        
+        // console.log(username)
+        console.log(notificationSocket)
+
+
         chatSocket.onmessage = function(e) {
+            console.log("aki",e)
             const data = JSON.parse(e.data);
+            console.log("aki",data)
+
             const chatLog = document.querySelector('#chat-log');
             
             if (data.message) {
@@ -313,6 +327,32 @@
         });
 
 
+        console.log("ta injas");
+        // برای دریافت پیام‌ها از WebSocket اعلان
+        notificationSocket.onmessage = function(e) {
+            const notificationData = JSON.parse(e.data);
+            // console.log("Notification received:", notificationData); // نمایش اطلاعات دریافت شده
+
+            // بررسی نوع اعلان و پردازش آن
+            if (notificationData.test === 'hello') {
+                console.log("New notification:", notificationData); // اطلاعات اعلان جدید را در کنسول نمایش دهید
+                // alert(`پیام جدید از ${notificationData.sender}: ${notificationData.message}`);
+                Swal.fire({
+                    title: `دعوت به چت خصوصی از طرف ${notificationData.sender}`,
+                    text: "آیا می‌خواهید به چت خصوصی وارد شوید؟",
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'بله، وارد شوید',
+                    cancelButtonText: 'خیر'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // کاربر درخواست را تایید کرده و به صفحه چت خصوصی هدایت می‌شود
+                        const chatUrl = `http://localhost:8000/chat/chat/private/${notificationData.sender}/`;
+                        window.location.href = chatUrl;
+                    }
+                });
+            }
+        };
        
     </script>
 </body>

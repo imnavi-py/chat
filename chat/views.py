@@ -22,7 +22,7 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-
+from django.views.decorators.csrf import csrf_exempt
 
 
 
@@ -117,7 +117,6 @@ def group_chat(request, slug):
             target_username = request.POST.get('target_username')
             message = request.POST.get('message')
             target_user = User.objects.get(username=target_username)
-            send_notification(target_user.id, message, request.user.username)  # ارسال اعلان
             return redirect('private_chat', target_username=target_username)
 
     user_profile = UserProfile.objects.get(user=request.user)
@@ -131,21 +130,29 @@ def group_chat(request, slug):
     })
 
 
-
+@csrf_exempt
 def login_view(request):
     if request.method == 'POST':
         form = UserLoginForm(request.POST)
         if form.is_valid():
             username = form.cleaned_data['username']
             password = form.cleaned_data['password']
-            user = authenticate(request, username=username, password=password)
-            if user is not None:
-                login(request, user)
-                return redirect('index')  # تغییر به آدرس مناسب
+            
+            try:
+                user = User.objects.get(username=username)
+                # بررسی رمز عبور (در صورت استفاده از رمز عبور هش شده)
+                if user.check_password(password):
+                    login(request, user)
+                    return redirect('index')  # تغییر به آدرس مناسب
+                else:
+                    form.add_error(None, 'نام کاربری یا رمز عبور نادرست است.')
+            except User.DoesNotExist:
+                form.add_error(None, 'نام کاربری یا رمز عبور نادرست است.')
+
     else:
         form = UserLoginForm()
-    
-    return render(request, 'chat/login.html', {'form': form})  # ارسال فرم به قالب
+
+    return render(request, 'chat/login.html', {'form': form})  # ارسال فرم به قالب # ارسال فرم به قالب
 
 
 
@@ -154,7 +161,7 @@ def logout_view(request):
     return redirect('login')  # هدایت به صفحه لاگین یا هر صفحه دیگری
 
 
-
+@csrf_exempt
 def register_view(request):
     if request.method == 'POST':
         form = UserRegistrationForm(request.POST)
@@ -208,19 +215,4 @@ def private_chat_view(request, target_username):
 
 def private_chat(request, username):
     return render(request, 'chat/chat_private.html', {'username': username})
-
-
-
-
-
-def send_notification(user_id, message, sender):
-    channel_layer = get_channel_layer()
-    async_to_sync(channel_layer.send)(
-        f'private_chat_{user_id}',
-        {
-            'type': 'chat_message',
-            'message': message,
-            'sender': sender,
-        }
-    )
 

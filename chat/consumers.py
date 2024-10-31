@@ -232,9 +232,12 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
         data = json.loads(text_data)
         message = data['message']
         sender = data['sender']
+        recipient = data['recipient']  # Assuming you send recipient info with the message
         
-        print(f"Received message: {message}")  # این خط برای دیباگینگ اضافه شده است
-        print(f"Sender is: {sender}")
+        # print(f"recipient user: {recipient}")
+        # print(f"Received message: {message}")  # این خط برای دیباگینگ اضافه شده است
+        # print(f"Sender is: {sender}")
+        # print(data)
         
         # ارسال پیام به گروه
         await self.channel_layer.group_send(
@@ -243,6 +246,18 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
                 'type': 'chat_message',
                 'message': message,
                 'user': self.username,  # اضافه کردن نام کاربر
+                'sender': sender,
+                'recipient': recipient,
+            }
+        )
+
+
+         # ارسال اعلان به کانال اعلان‌ها
+        await self.channel_layer.group_send(
+            f'notifications_{recipient}',
+            {
+                'type': 'receive_notification',
+                'message': message,
                 'sender': sender,
             }
         )
@@ -259,3 +274,112 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
 
 
 
+
+    async def private_message(self, event):
+        message = event['message']
+        sender = event['sender']
+        recipient = event['recipient']
+
+        # Send message to WebSocket
+        await self.send(text_data=json.dumps({
+            'message': message,
+            'sender': sender,
+            'type': 'private_message',
+        }))
+        
+        # Here you can add the code to notify the recipient (if they are not connected)
+        await self.send_notification(recipient)
+
+    async def send_notification(self, recipient):
+        # Send notification logic to the user here
+        # This could be an alert or a WebSocket message depending on your implementation
+        await self.channel_layer.group_send(
+            f'notification_{recipient}',  # Group name for notifications
+            {
+                'type': 'user_notification',
+                'message': f'You have a new message from {self.username}.',
+            }
+        )
+
+    async def user_notification(self, event):
+        message = event['message']
+        # Here you would send the notification to the user, perhaps via WebSocket
+        await self.send(text_data=json.dumps({
+            'type': 'notification',
+            'message': message,
+        }))
+
+
+
+
+
+
+class NotificationConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.username = self.scope['url_route']['kwargs']['username']
+        self.room_group_name = f'notifications_{self.username}'
+        
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+    async def receive(self, text_data):
+        data = json.loads(text_data)
+        message = data['message']
+        sender = data['sender']
+        recipient = data['recipient']
+        test = data['test']
+
+        result = ""
+        if test == 'akbar':
+            result = "hello"
+            # ارسال پیام hello به کاربر خاص
+            await self.send_to_all_users(result)
+        else:
+            result = "no key"
+
+        # ارسال پیام به گروه
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'receive_notification',
+                'message': message,
+                'sender': sender,
+                'recipient': recipient,
+                'test': result
+            }
+        )
+
+    async def receive_notification(self, event):
+        message = event.get("message")
+        sender = event.get("sender")
+        recipient = event.get("recipient", None)  # استفاده از get برای جلوگیری از خطا
+        test = event.get("test")
+        if recipient:
+            await self.send(text_data=json.dumps({
+                "message": message,
+                "sender": sender,
+                "recipient": recipient,
+                "test": test
+            }))
+
+    async def send_to_all_users(self, message):
+        # ارسال پیام به همه کاربران
+        await self.channel_layer.group_send(
+            'notifications',  # نام گروه عمومی
+            {
+                'type': 'receive_notification',
+                'message': message,
+                'sender': 'system',  # یا نام دیگر برای فرستنده
+                'test': 'hello'  # یا هر مقداری که لازم است
+            }
+        )
