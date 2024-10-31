@@ -4,7 +4,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Group Chat</title>
+    <title>Group Chatroom</title>
     {% load static %} <!-- بارگذاری تگ static -->
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
@@ -101,6 +101,7 @@
 <body class="container mt-4">
     <!-- دکمه خروج -->
     <a href="{% url 'logout' %}" class="logout-btn">خروج</a>
+
 
     <!-- عنوان گروه -->
     <h1 class="text-center">{{ group.name }}</h1>
