@@ -1,7 +1,8 @@
 import pytz
 import re
 import hashlib
-
+from datetime import datetime, timedelta
+from rest_framework.response import Response
 
 
 def convert_to_tehran_time(utc_dt):
@@ -40,3 +41,28 @@ def generate_private_chat_id(user1, user2):
     chat_id = ''.join(sorted([user1, user2]))
     # از hashlib برای تولید یک شناسه منحصر به فرد استفاده کنید
     return hashlib.sha256(chat_id.encode()).hexdigest()
+
+
+
+
+
+AUTH_TOKEN_VALIDITY = 3600  # زمان انقضای توکن به ثانیه (مثلاً 7 روز)
+
+def set_auth_cookie(response, token):
+    print('API Response token:', token)
+    
+    # تنظیم تاریخ انقضا
+    expires_at = datetime.utcnow() + timedelta(seconds=AUTH_TOKEN_VALIDITY)
+    
+    # تنظیم کوکی
+    response.set_cookie(
+        key='auth_token',
+        value=token,
+        httponly=True,  # جلوگیری از دسترسی از طریق جاوااسکریپت
+        secure=True,    # ارسال فقط از طریق HTTPS
+        samesite='None',  # جلوگیری از حملات CSRF
+        expires=expires_at,
+        domain='.nargil.co'  # دامنه‌ای که می‌خواهید کوکی در آن قابل دسترسی باشد
+    )
+    
+    return response

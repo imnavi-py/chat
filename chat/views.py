@@ -8,7 +8,7 @@ from django.shortcuts import render, get_object_or_404
 from django.views import View
 
 from chat.forms import GroupSearchForm, UserLoginForm, UserProfileForm, UserRegistrationForm
-from chat.utils import convert_to_ascii
+from chat.utils import convert_to_ascii, set_auth_cookie
 from .models import Group, Message, UserProfile
 
 from django.shortcuts import render, redirect
@@ -23,6 +23,15 @@ from django.db.models import Q
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.views.decorators.csrf import csrf_exempt
+
+
+from django.contrib.auth import authenticate
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.authtoken.models import Token
+from datetime import datetime, timedelta
+
 
 
 
@@ -216,3 +225,32 @@ def private_chat_view(request, target_username):
 def private_chat(request, username):
     return render(request, 'chat/chat_private.html', {'username': username})
 
+
+AUTH_TOKEN_VALIDITY = 604800  # 7 روز
+class LoginView(APIView):
+    def post(self, request):
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        # احراز هویت کاربر
+        user = authenticate(request, username=username, password=password)
+        
+        if user is not None:
+            # توکن را تولید یا دریافت کنید
+            token, created = Token.objects.get_or_create(user=user)
+
+            # تنظیم کوکی
+            expires_at = datetime.utcnow() + timedelta(seconds=AUTH_TOKEN_VALIDITY)
+            response = Response({f"message: Login successful, token : {token.key}" }, status=status.HTTP_200_OK)
+            response.set_cookie(
+                key='token',
+                value=token.key,
+                httponly=True,
+                secure=False,
+                samesite='None',  # یا 'Lax' یا 'Strict' بسته به نیاز شما
+                expires=expires_at,
+                domain='.nargil.co'
+            )
+            return response
+        else:
+            return Response({'error': 'Invalid Credentials'}, status=status.HTTP_401_UNAUTHORIZED)
