@@ -20,8 +20,8 @@ from django.urls import include, path
 from django.conf.urls.static import static
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('chat/', include('chat.urls')),  # این خط را اضافه کنید
+    path('cht/admin/', admin.site.urls),
+    path('cht/', include('chat.urls')),  # این خط را اضافه کنید
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

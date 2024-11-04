@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>چت خصوصی</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f0f2f5;
+        }
+        #chat-log {
+            border: 1px solid #ccc;
+            height: 400px;
+            overflow-y: scroll;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+        }
+        .message:hover {
+            background-color: #f1f1f1;
+        }
+        .username {
+            font-weight: bold;
+            color: #007bff;
+        }
+        .emoji-list {
+            display: none;
+            position: absolute;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 5px;
+            z-index: 1000;
+            margin-top: 5px; /* Space between button and emoji list */
+            left: 70% /* Align to the right of the button */
+
+        }
+        
+        .emoji {
+            cursor: pointer;
+            margin: 0 5px;
+        }
+        .input-group {
+            position: relative;
+            margin-top: 10px;
+        }
+        #chat-message-input {
+            border-radius: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            flex-grow: 1;
+        }
+        #chat-message-submit, #emoji-button {
+            border-radius: 20px;
+            margin-left: 10px;
+        }
+        label {
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body class="container mt-4">
+    <h1 class="text-center mb-4">چت خصوصی با {{ target_username }}</h1>
+
+    <div id="chat-log"></div>
+
+    <div class="input-group">
+        <input type="text" id="chat-message-input" placeholder="پیام خود را بنویسید..." />
+        <button id="emoji-button" title="اضافه کردن اموجی" class="btn btn-light">😊</button>
+        <button id="chat-message-submit" title="ارسال پیام" class="btn btn-primary">ارسال</button>
+        <button id="chat-like" title="ارسال پیام" class="btn btn-primary">لایک</button>
+        <label for="chat-file-input" style="cursor: pointer;">
+            <span title="انتخاب فایل" class="btn btn-light">📎</span>
+            <input type="file" id="chat-file-input" style="display: none;" />
+        </label>
+    </div>
+
+    <div id="emoji-list" class="emoji-list" style="display: none;">
+        <span class="emoji" data-emoji="😊">😊</span>
+        <span class="emoji" data-emoji="😂">😂</span>
+        <span class="emoji" data-emoji="😍">😍</span>
+        <span class="emoji" data-emoji="🚀">🚀</span>
+        <!-- Add more emojis as needed -->
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatMessages = document.querySelector('#chat-log'); 
+            const currentUsername = '{{ request.user.username }}';
+            const targetUsername = '{{ target_username }}';
+
+            const roomName = "private_chat_" + 
+                             (currentUsername < targetUsername ? currentUsername : targetUsername) + "_" + 
+                             (currentUsername > targetUsername ? currentUsername : targetUsername);
+
+            const chatSocket = new WebSocket(
+                'ws://' + window.location.host + '/ws/private_chat/' + roomName + '/'
+            );
+
+            const notification = new WebSocket(
+                'ws://' + window.location.host + '/ws/notifications/' + targetUsername + '/'
+            );
+
+            chatSocket.onmessage = function(e) {
+                console.log("taki", e)
+
+                const data = JSON.parse(e.data);
+                const newMessage = document.createElement('div');
+                newMessage.classList.add('message');
+
+
+
+                if (data.message) {
+                    const currentTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Tehran' });
+                    newMessage.innerHTML = `
+                        <img src="${data.avatar_url}" alt="Avatar" class="avatar" width="40" height="40" style="border-radius: 50%; margin-right: 10px;">
+                        <span class="username">${data.sender}:</span> ${data.message} <br>
+                        <small>${currentTime}</small>
+                    `;
+                    chatMessages.appendChild(newMessage);
+                }
+
+                if (data.file) {
+                    const newFileMessage = document.createElement('div');
+                    newFileMessage.classList.add('message');
+                    newFileMessage.innerHTML = `
+                        <strong>${data.sender}:</strong> <a href="${data.file}">${data.filename}</a>
+                    `;
+                    chatMessages.appendChild(newFileMessage);
+                }
+
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            };
+
+            document.querySelector('#chat-message-input').focus();
+            document.querySelector('#chat-message-input').onkeyup = function(e) {
+                if (e.keyCode === 13) {
+                    document.querySelector('#chat-message-submit').click();
+                }
+            };
+
+
+            document.querySelector('#chat-like').onclick = function(e) {
+
+
+                const sendNotification = {
+                    'message': "akbar",
+                    'sender': currentUsername,
+                    'recipient': targetUsername,
+                    'test' : 'akbar'
+                };
+                notification.send(JSON.stringify(sendNotification))
+
+            }
+
+
+            document.querySelector('#chat-message-submit').onclick = function(e) {
+                const messageInputDom = document.querySelector('#chat-message-input');
+                // const message = {id: "12345",firstname : "ali", message : messageInputDom.value, 'sender': currentUsername,}
+                const message = messageInputDom.value;
+                const fileInput = document.querySelector('#chat-file-input');
+
+                const dataToSend = {
+                    'test' : 'msg',
+                    'message': message,
+                    'sender': currentUsername,
+                    'recipient': targetUsername, // اضافه کردن recipient به داده‌ها
+                };
+
+                const sendNotification = {
+                    'message': message,
+                    'sender': currentUsername,
+                    'recipient': targetUsername,
+                    'test' : 'akbar'
+                };
+
+                if (fileInput.files.length > 0) {
+                    const file = fileInput.files[0];
+                    const reader = new FileReader();
+
+                    reader.onloadend = function() {
+                        dataToSend.file = reader.result; // Base64 encoded file
+                        dataToSend.filename = file.name; // Send filename
+                        chatSocket.send(JSON.stringify(dataToSend));
+                    };
+
+                    reader.readAsDataURL(file); // Convert the file to base64
+                } else {
+                    chatSocket.send(JSON.stringify(dataToSend));
+                    notification.send(JSON.stringify(sendNotification))
+                }
+
+                messageInputDom.value = '';
+                fileInput.value = ''; // Clear file input
+            };
+
+
+            document.querySelector('#chat-file-input').onchange = function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                chatSocket.send(JSON.stringify({
+                    'file': event.target.result,
+                    'filename': file.name,
+                }));
+            };
+            reader.readAsDataURL(file);
+            };
+
+            document.getElementById('emoji-button').onclick = function() {
+                const emojiList = document.getElementById('emoji-list');
+                if (emojiList.style.display == 'none') {
+                    // اگر نمایش است، آن را پنهان کن
+                    emojiList.style.display = 'block';
+                } else {
+                    // اگر پنهان است، آن را نمایش بده
+                    emojiList.style.display = 'none';
+                }
+                
+            };
+
+            const emojis = document.querySelectorAll('.emoji');
+            emojis.forEach(emoji => {
+                
+                emoji.onclick = function() {
+                    const messageInput = document.querySelector('#chat-message-input');
+                    messageInput.value += emoji.getAttribute('data-emoji'); // Add emoji to input
+                    document.getElementById('emoji-list').style.display = 'none'; // Close emoji list
+                    messageInput.focus(); // Focus on input
+                };
+            });
+        });
+    </script>
+</body>
+</html>

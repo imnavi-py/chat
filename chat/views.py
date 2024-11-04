@@ -8,7 +8,7 @@ from django.shortcuts import render, get_object_or_404
 from django.views import View
 
 from chat.forms import GroupSearchForm, UserLoginForm, UserProfileForm, UserRegistrationForm
-from chat.utils import convert_to_ascii
+from chat.utils import convert_to_ascii, set_auth_cookie
 from .models import Group, Message, UserProfile
 
 from django.shortcuts import render, redirect
@@ -22,6 +22,15 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+from django.views.decorators.csrf import csrf_exempt
+
+
+from django.contrib.auth import authenticate
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.authtoken.models import Token
+from datetime import datetime, timedelta
 
 
 
@@ -107,10 +116,17 @@ def group_chat(request, slug):
 
     # اضافه کردن کاربر جدید
     if request.method == 'POST' and 'add_member' in request.POST:
-        username = request.POST.get('username')
-        user_to_add = User.objects.get(username=username)
-        group.members.add(user_to_add)
-        return redirect('group_chat', slug=slug)
+        if 'add_member' in request.POST:
+            username = request.POST.get('username')
+            user_to_add = User.objects.get(username=username)
+            group.members.add(user_to_add)
+            return redirect('group_chat', slug=slug)
+    
+        elif 'send_private_message' in request.POST:  # بررسی ارسال پیام خصوصی
+            target_username = request.POST.get('target_username')
+            message = request.POST.get('message')
+            target_user = User.objects.get(username=target_username)
+            return redirect('private_chat', target_username=target_username)
 
     user_profile = UserProfile.objects.get(user=request.user)
 
@@ -123,21 +139,29 @@ def group_chat(request, slug):
     })
 
 
-
+@csrf_exempt
 def login_view(request):
     if request.method == 'POST':
         form = UserLoginForm(request.POST)
         if form.is_valid():
             username = form.cleaned_data['username']
             password = form.cleaned_data['password']
-            user = authenticate(request, username=username, password=password)
-            if user is not None:
-                login(request, user)
-                return redirect('index')  # تغییر به آدرس مناسب
+            
+            try:
+                user = User.objects.get(username=username)
+                # بررسی رمز عبور (در صورت استفاده از رمز عبور هش شده)
+                if user.check_password(password):
+                    login(request, user)
+                    return redirect('index')  # تغییر به آدرس مناسب
+                else:
+                    form.add_error(None, 'نام کاربری یا رمز عبور نادرست است.')
+            except User.DoesNotExist:
+                form.add_error(None, 'نام کاربری یا رمز عبور نادرست است.')
+
     else:
         form = UserLoginForm()
-    
-    return render(request, 'chat/login.html', {'form': form})  # ارسال فرم به قالب
+
+    return render(request, 'chat/login.html', {'form': form})  # ارسال فرم به قالب # ارسال فرم به قالب
 
 
 
@@ -146,7 +170,7 @@ def logout_view(request):
     return redirect('login')  # هدایت به صفحه لاگین یا هر صفحه دیگری
 
 
-
+@csrf_exempt
 def register_view(request):
     if request.method == 'POST':
         form = UserRegistrationForm(request.POST)
@@ -188,14 +212,45 @@ def chat_view(request, group_name):
     return render(request, 'chat.html', {'group_name': group_name})
 
 @login_required
-def private_chat_view(request, username):
-    user_to_chat = get_object_or_404(User, username=username)
-    return render(request, 'chat/private_chat.html', {'user_to_chat': user_to_chat})
+def private_chat_view(request, target_username):
+    current_username = request.user.username  # نام کاربر فعلی
+    target_user = get_object_or_404(User, username=target_username)  # بررسی وجود کاربر هدف
+    return render(request, 'chat/chat_private.html', {
+        'username': current_username,
+        'target_username': target_username,
+        'target_user': target_user,  # ارسال پروفایل کاربر هدف به قالب
+    })
 
 
+def private_chat(request, username):
+    return render(request, 'chat/chat_private.html', {'username': username})
 
 
+AUTH_TOKEN_VALIDITY = 604800  # 7 روز
+class LoginView(APIView):
+    def post(self, request):
+        print('request.COOKIES:' ,request.COOKIES)
+        username = request.data.get('username')
+        password = request.data.get('password')
 
- 
-
-
+        # احراز هویت کاربر
+        user = authenticate(request, username=username, password=password)
+        
+        if user is not None:
+            # توکن را تولید یا دریافت کنید
+            token, created = Token.objects.get_or_create(user=user)
+            print('000000000000000000000000000000',token)
+            # تنظیم کوکی
+            expires_at = datetime.utcnow() + timedelta(seconds=AUTH_TOKEN_VALIDITY)
+            response = Response({f"message: Login successful, token : {token.key}" }, status=status.HTTP_200_OK)
+            response.set_cookie(
+                key='token',
+                value=token.key,
+                httponly=False,
+                secure=True,
+                samesite='None',  # یا 'Lax' یا 'Strict' بسته به نیاز شم
+                domain='.nargil.co'
+            )
+            return response
+        else:
+            return Response({'error': 'Invalid Credentials'}, status=status.HTTP_401_UNAUTHORIZED)
