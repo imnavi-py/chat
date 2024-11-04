@@ -3,7 +3,7 @@ from django.urls import path
 
 from chat import consumers
 from . import views
-from .views import LoginView, delete_group, login_view, logout_view,   register_view, profile_view
+from .views import CreateGroupAPIView, LoginView, delete_group, login_view, logout_view,   register_view, profile_view
 from django.conf.urls.static import static
 
 urlpatterns = [
@@ -23,6 +23,8 @@ urlpatterns = [
     path('chat/private/<str:target_username>/', views.private_chat_view, name='private_chat'),
 
     path('api-token-auth/', LoginView.as_view(), name='api_token_auth'),
+
+    path('api/groups/create/', CreateGroupAPIView.as_view(), name='create_group_api'),
     
     
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -254,3 +254,102 @@ class LoginView(APIView):
             return response
         else:
             return Response({'error': 'Invalid Credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+
+
+    ##API
+
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from .models import Group
+from .utils import convert_to_ascii  # فرض کنید این تابع برای تبدیل به ASCII است
+from asgiref.sync import sync_to_async
+from django.contrib.auth.models import User
+from rest_framework.exceptions import AuthenticationFailed
+        
+def authenticate_user_with_token(token):
+    try:
+        # فرض می‌کنیم توکن به عنوان ID کاربر است
+        user = User.objects.get(id=token)
+        
+        if user.is_active:  # بررسی کنید که کاربر فعال باشد
+            return {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'is_superuser': user.is_superuser,
+                'is_active': user.is_active,
+            }
+        else:
+            raise AuthenticationFailed('کاربر غیرفعال است.')
+    
+    except User.DoesNotExist:
+        raise AuthenticationFailed('کاربر یافت نشد.')
+    
+class CreateGroupAPIView(APIView):
+    # permission_classes = [IsAuthenticated]
+    authentication_classes = []
+    
+    def get_user_from_token(self, token):
+        try:
+            # فرض می‌کنیم توکن یک شناسه کاربر است
+            user = User.objects.get(auth_token=token)  # یا شناسه کاربر
+            if user.is_active:
+                return user
+            else:
+                raise AuthenticationFailed('کاربر غیرفعال است.')
+        except User.DoesNotExist:
+            raise AuthenticationFailed('کاربر یافت نشد.')
+        
+    def post(self, request):
+
+        # توکن ثابت برای تست
+        token = "b2a7225bcedd57236b8bf5d64b91b6240fb7ee19"
+
+        # احراز هویت کاربر با توکن ثابت
+        try:
+            self.user = self.get_user_from_token(token)
+            print(self.user.is_superuser)
+        except AuthenticationFailed as e:
+            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+        
+        if not self.user.is_superuser:
+            return Response({"error": "شما اجازه ایجاد گروه را ندارید."}, status=status.HTTP_403_FORBIDDEN)
+            
+        group_name = request.data.get('group_name')
+        slug = request.data.get('slug')
+        group_type = request.data.get('type')
+
+        ascii_group_name = convert_to_ascii(group_name)
+
+        if not slug:
+            slug = convert_to_ascii(group_name)
+
+        # بررسی وجود گروه با نام مشابه
+        if Group.objects.filter(name=group_name).exists():
+            return Response({"error": "این نام گروه قبلاً استفاده شده است."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # بررسی وجود نامک مشابه
+        if Group.objects.filter(slug=slug).exists():
+            return Response({"error": "این نامک قبلاً استفاده شده است."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ایجاد گروه
+        group = Group.objects.create(name=group_name, slug=convert_to_ascii(slug), created_by=self.user, type=group_type)
+        group.members.add(self.user)
+        print(group.created_by.username,)
+
+        # پاسخ با اطلاعات گروه جدید
+        response_data = {
+            "id": group.id,
+            "name": group.name,
+            "slug": group.slug,
+            "created_by": group.created_by.username,
+            "type": group.type,
+            "members_count": group.members.count(),
+        }
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
+
+
