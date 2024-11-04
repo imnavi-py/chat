@@ -494,10 +494,10 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         sender = data['sender']
         recipient = data['recipient']
         test = data['test']
-
+        print("data mojude :", data)
         result = ""
         if test == 'akbar':
-            result = "hello"
+            result = "pv"
             # ارسال پیام hello به کاربر خاص
             await self.send_to_all_users(result)
         else:
