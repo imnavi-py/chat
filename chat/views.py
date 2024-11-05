@@ -9,7 +9,8 @@ from django.views import View
 
 from chat.forms import GroupSearchForm, UserLoginForm, UserProfileForm, UserRegistrationForm
 from chat.utils import convert_to_ascii, set_auth_cookie
-from .models import Group, Message, PrivateMessage, UserProfile
+from chatapp.lib.ApiResponse import ApiResponse
+from .models import Group, Message, PrivateGroup, PrivateMessage, UserProfile
 
 from django.shortcuts import render, redirect
 from .models import Group
@@ -40,7 +41,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from .models import Group, Message, UserProfile
 from .serializers import MemberSerializer, MessageSerializer, UserProfileSerializer
-
+from django.utils.translation import gettext_lazy as _
 
 
 # @login_required(login_url = 'chat/login.html')
@@ -279,7 +280,7 @@ class LoginView(APIView):
 
     ##API
 
-tokenAccess = "b2a7225bcedd57236b8bf5d64b91b6240fb7ee19"
+tokenAccess = "3f6b57c057236ffb01f342d929a7110d4dedbacd"
 def get_user_from_token(self, token):
         try:
             # فرض می‌کنیم توکن یک شناسه کاربر است
@@ -323,6 +324,16 @@ def authenticate_user_with_token(token):
 class CreateGroupAPIView(APIView):
     # permission_classes = [IsAuthenticated]
     authentication_classes = []
+    def get_user_from_token(self, token):
+        try:
+            # فرض می‌کنیم توکن یک شناسه کاربر است
+            user = User.objects.get(auth_token=token)  # یا شناسه کاربر
+            if user.is_active:
+                return user
+            else:
+                raise AuthenticationFailed('کاربر غیرفعال است.')
+        except User.DoesNotExist:
+            raise AuthenticationFailed('کاربر یافت نشد.')
     
     
         
@@ -379,21 +390,41 @@ class CreateGroupAPIView(APIView):
 
 class ListGroupsAPIView(APIView):
     def get(self, request):
-        # بازیابی تمام گروه‌ها
-        groups = Group.objects.all()
+        # دریافت پارامتر type از درخواست
+        group_type = request.query_params.get('type', None)
+
+        # بررسی نوع گروه دریافتی
+        if group_type == 'Group':
+            # اگر نوع Group ارسال شد
+            groups = Group.objects.all()
+        elif group_type == 'PrivateGroup':
+            # اگر نوع PrivateGroup ارسال شد
+            groups = PrivateGroup.objects.all()
+        else:
+            # اگر هیچ پارامتر type ارسال نشده یا نوع دیگری ارسال شده، تمام گروه‌ها از Group بازیابی می‌شود
+            groups = Group.objects.all()
 
         # ساخت لیست از گروه‌ها
         group_list = []
         for group in groups:
-            group_list.append({
+            group_data = {
                 "id": group.id,
                 "name": group.name,
                 "slug": group.slug,
                 "created_by": group.created_by.username,
-                "type": group.type,
                 "members_count": group.members.count(),
-            })
+            }
+            
+            # اگر گروه از نوع PrivateGroup باشد، فیلد 'type' را نمایش ندهید
+            if isinstance(group, PrivateGroup):
+                # حذف فیلد 'type' برای PrivateGroup
+                group_list.append(group_data)
+            else:
+                # در غیر این صورت، فیلد 'type' را اضافه کن
+                group_data["type"] = group.type
+                group_list.append(group_data)
 
+        # ارسال داده‌ها به عنوان Response
         return Response(group_list, status=status.HTTP_200_OK)
     
 
@@ -473,3 +504,65 @@ def group_chat_api(request, slug):
     }
 
     return Response(data)
+
+
+## Get All Users Data
+
+@api_view(['GET'])
+def all_users_with_groups_api(request):
+    # دریافت تمام کاربران
+    all_users = User.objects.all()
+
+    # آماده‌سازی داده‌ها با اطلاعات گروه‌ها
+    all_users_data = []
+    for user in all_users:
+        user_profile = UserProfile.objects.get(user=user)  # دریافت UserProfile مرتبط
+        groups = user.group_members.all()  # دریافت گروه‌هایی که کاربر عضو آن‌هاست
+        groups_data = [{'id': group.id, 'name': group.name, 'slug': group.slug, 'type': group.type} for group in groups]
+
+        all_users_data.append({
+            'id': user_profile.id,
+            'username': user.username,
+            'is_superuser': user.is_superuser,
+            'groups': groups_data  # لیست گروه‌ها
+        })
+
+    return Response({"all_users": all_users_data}, status=status.HTTP_200_OK)
+
+
+
+## User Profile
+
+class UserProfileAPIView(APIView):
+    # permission_classes = [IsAuthenticated]  # احراز هویت برای کاربران لاگین‌کرده
+    
+    def get(self, request):
+
+        token = tokenAccess  # یا از request.headers.get('Authorization') استفاده کنید
+
+        try:
+            user = Token.objects.get(key=token).user
+        except Token.DoesNotExist:
+            return Response({"error": "Invalid token."}, status=status.HTTP_403_FORBIDDEN)
+        # دریافت پروفایل کاربر یا ایجاد آن در صورت عدم وجود
+        user_profile, created = UserProfile.objects.get_or_create(user=user)
+        serializer = UserProfileSerializer(user_profile)
+        return ApiResponse.success(self, _("User Profile Founded"), serializer.data, status.HTTP_200_OK)
+
+    def post(self, request):
+        token = tokenAccess  # یا از request.headers.get('Authorization') استفاده کنید
+
+        try:
+            user = Token.objects.get(key=token).user
+        except Token.DoesNotExist:
+            return Response({"error": "Invalid token."}, status=status.HTTP_403_FORBIDDEN)
+        
+        # دریافت یا ایجاد پروفایل کاربر
+        user_profile, created = UserProfile.objects.get_or_create(user=user)
+        serializer = UserProfileSerializer(user_profile, data=request.data, partial=True)
+        
+        if serializer.is_valid():
+            serializer.save()
+            return ApiResponse.success(self, _("UserProfile Updated"),serializer.data, status.HTTP_200_OK)
+        return ApiResponse.error(self, _("Something went wrong!"),serializer.errors, status.HTTP_400_BAD_REQUEST)
+

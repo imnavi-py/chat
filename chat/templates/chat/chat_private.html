@@ -106,11 +106,15 @@
                 'wss://' + window.location.host + '/cht/ws/private_chat/' + roomName + '/'
             );
 
+            
+
             const notification = new WebSocket(
                 'wss://' + window.location.host + '/cht/ws/notifications/' + targetUsername + '/'
             );
 
             chatSocket.onmessage = function(e) {
+                console.log("room name: ",roomName)
+                console.log("socket name: ",chatSocket)
                 console.log("taki", e)
 
                 const data = JSON.parse(e.data);

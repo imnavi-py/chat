@@ -17,6 +17,8 @@ from django.utils.text import slugify
 
 
 
+
+
 class GroupChatConsumer(AsyncWebsocketConsumer):
 
     async def connect(self):
@@ -43,7 +45,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         
         if not self.token:
             # اگر توکن در هدر موجود نبود، بررسی کوکی
-            token = "e158683f3b006d332a05678729e6ce2f709ecad9"
+            token = "3f6b57c057236ffb01f342d929a7110d4dedbacd"
             self.token = token
             # self.scope['cookies'].get('auth_token')
         
@@ -143,8 +145,8 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
     def get_user_avatar(self):
         # دریافت آواتار کاربر
         if self.user.is_authenticated:
-            return self.user.userprofile.avatar.url if self.user.userprofile.avatar else '/static/profiles/default.png'
-        return '/static/profiles/default.png'
+            return self.user.userprofile.avatar.url if self.user.userprofile.avatar else '/cht/static/profiles/default.png'
+        return '/cht/static/profiles/default.png'
     
     @database_sync_to_async
     def save_message(self, message, timestamp,file_path=None):
@@ -392,8 +394,8 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
     def get_user_avatar(self):
         # دریافت آواتار کاربر
         if self.user.is_authenticated:
-            return self.user.userprofile.avatar.url if self.user.userprofile.avatar else '/static/profiles/default.png'
-        return '/static/profiles/default.png'
+            return self.user.userprofile.avatar.url if self.user.userprofile.avatar else '/cht/static/profiles/default.png'
+        return '/cht/static/profiles/default.png'
     
     @database_sync_to_async
     def save_file(self, file_content, original_filename):
@@ -441,17 +443,17 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def save_private_message(self, message, timestamp, recipient_user, file_path=None):
-        from .models import PrivateMessage, Group
-
+        from .models import PrivateMessage
+        from chat.models import PrivateGroup
         slug = slugify(self.room_group_name)
-        group = Group.objects.filter(name=self.room_group_name, slug=slug).first()
+        group = PrivateGroup.objects.filter(name=self.room_group_name, slug=slug).first()
         
         # اگر گروه وجود ندارد، آن را ایجاد می‌کنیم
         if not group:
-            group = Group.objects.create(
+            group = PrivateGroup.objects.create(
                 name=self.room_group_name,
                 slug=slug,
-                type='public',  # نوع گروه را مشخص کنید، مثلاً عمومی یا خصوصی
+                # type='public',  # نوع گروه را مشخص کنید، مثلاً عمومی یا خصوصی
                 created_by=self.user  # به عنوان کاربری که پیام می‌فرستد، گروه را ایجاد می‌کند
             )
             group.members.add(self.user)  # افزودن ایجاد کننده به اعضای گروه
@@ -462,7 +464,7 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
             content=message if not file_path else '',
             file=file_path,
             timestamp=timestamp,
-            group=Group.objects.get(name=group),
+            pvgroup=PrivateGroup.objects.get(name=group),
         )
 
 

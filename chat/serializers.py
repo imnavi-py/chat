@@ -71,17 +71,19 @@ class CreateGroupAPIView(APIView):
 
 class MessageSerializer(serializers.ModelSerializer):
     user_name = serializers.ReadOnlyField(source='user.username')
-
+    avatar = serializers.ImageField(source='user.userprofile.avatar', read_only=True)
+    
     class Meta:
         model = Message
-        fields = ['id', 'content', 'timestamp', 'user', 'user_name']
+        fields = ['id', 'content', 'timestamp', 'user', 'user_name', 'avatar', 'file']
 
 class UserProfileSerializer(serializers.ModelSerializer):
     is_superuser = serializers.BooleanField(source='user.is_superuser', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)  # اضافه کردن فیلد نام کاربری
 
     class Meta:
         model = UserProfile
-        fields = ['id', 'user', 'first_name', 'last_name', 'avatar', 'is_superuser']
+        fields = ['id', 'user', 'first_name', 'last_name', 'avatar', 'is_superuser', 'username']
 
 class MemberSerializer(serializers.ModelSerializer):
     username = serializers.ReadOnlyField(source='user.username')

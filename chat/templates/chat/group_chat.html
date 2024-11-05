@@ -349,7 +349,9 @@
                 }).then((result) => {
                     if (result.isConfirmed) {
                         // کاربر درخواست را تایید کرده و به صفحه چت خصوصی هدایت می‌شود
-                        const chatUrl = `http://localhost:8000/cht/chat/private/${notificationData.sender}/`;
+                        const chatUrl = '/cht/chat/private/'+ notificationData.sender +'/';
+
+                 
                         window.location.href = chatUrl;
                     }
                 });
