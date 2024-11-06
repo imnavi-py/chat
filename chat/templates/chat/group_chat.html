@@ -197,13 +197,13 @@
     <script>
         const groupSlug = "{{ group.slug }}";
         const chatSocket = new WebSocket(
-            'ws://' + window.location.host + '/ws/chat/' + groupSlug + '/'
+            'ws://' + window.location.host + '/cht/ws/chat/' + groupSlug + '/'
         );
 
         // WebSocket برای اعلان‌ها
         const username = "{{ request.user.username }}"; // نام کاربری را از Django بگیرید
         const notificationSocket = new WebSocket(
-            'ws://' + window.location.host + '/ws/notifications/' + username + '/'
+            'ws://' + window.location.host + '/cht/ws/notifications/' + username + '/'
         );
         
         // console.log(username)
@@ -335,7 +335,7 @@
             // console.log("Notification received:", notificationData); // نمایش اطلاعات دریافت شده
 
             // بررسی نوع اعلان و پردازش آن
-            if (notificationData.test === 'hello') {
+            if (notificationData.test === 'pv') {
                 console.log("New notification:", notificationData); // اطلاعات اعلان جدید را در کنسول نمایش دهید
                 // alert(`پیام جدید از ${notificationData.sender}: ${notificationData.message}`);
                 Swal.fire({
@@ -347,9 +347,12 @@
                     cancelButtonText: 'خیر'
                 }).then((result) => {
                     if (result.isConfirmed) {
+                        // print(window.location.host)
                         // کاربر درخواست را تایید کرده و به صفحه چت خصوصی هدایت می‌شود
-                        const chatUrl = `http://localhost:8000/chat/chat/private/${notificationData.sender}/`;
+                        const chatUrl = '/cht/chat/private/'+ notificationData.sender +'/';
+
                         window.location.href = chatUrl;
+                        
                     }
                 });
             }

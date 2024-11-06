@@ -2,7 +2,7 @@ DATABASES = {
      'default': {
              # mysql or mariadb
              'ENGINE': 'django.db.backends.mysql',
-             'NAME': 'devchat',
+             'NAME': 'chat',
              'USER': 'root',
              'PASSWORD': 'aVt3.tdOUr]5j@2sz',
              'HOST': 'dev3.nargil.co',

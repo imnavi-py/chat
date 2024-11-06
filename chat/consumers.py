@@ -43,7 +43,10 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
         
         if not self.token:
             # اگر توکن در هدر موجود نبود، بررسی کوکی
-            token = "e158683f3b006d332a05678729e6ce2f709ecad9"
+            # 868af6b0f862d5e91553a3202ed7a923b825cd97
+            # e158683f3b006d332a05678729e6ce2f709ecad9
+            token = "00a289d2fabae9baacbb83eeb47d7cb5e3197317"
+
             self.token = token
             # self.scope['cookies'].get('auth_token')
         
@@ -92,6 +95,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             await self.save_message(message, timestamp)
 
             user_avatar_url = await self.get_user_avatar()
+            print(user_avatar_url)
 
             await self.channel_layer.group_send(
                 self.group_slug,
@@ -252,11 +256,30 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
 
 
 class PrivateChatConsumer(AsyncWebsocketConsumer):
+    
+    
+        
+    @sync_to_async
+    def get_user_from_token(self, token):
+        from rest_framework.authtoken.models import Token
+        try:
+            user_token = Token.objects.get(key=token)
+            return user_token.user
+        except Token.DoesNotExist:
+            return None
     async def connect(self):
+        
         self.username = self.scope['url_route']['kwargs']['username']
-        self.room_group_name = f'private_chat_{self.username}'
+        self.room_group_name = f'{self.username}'
         self.user = self.scope['user']
 
+        token = "00a289d2fabae9baacbb83eeb47d7cb5e3197317"
+
+        self.token = token
+
+        self.user = await self.get_user_from_token(self.token) if self.token else None
+        print(self.user)
+  
         # ملحق شدن به گروه
         await self.channel_layer.group_add(
             self.room_group_name,
@@ -280,7 +303,12 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
             
             message = data['message']
             sender = data['sender']
+            # print(sender)
+            # sender = "admin"
             recipient = data['recipient']  # Assuming you send recipient info with the message
+            # print(recipient)
+            # recipient = "user"
+
             user_avatar_url = await self.get_user_avatar()
             timestamp = self.get_current_time()
             # print(f"recipient user: {recipient}")
@@ -342,6 +370,7 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
         message = event['message']
         sender = event['sender']
         user_avatar_url = await self.get_user_avatar()
+        # print("karbar : ", sender ,"ersal kard" , user_avatar_url)
 
 
         # Send message to WebSocket
@@ -392,6 +421,7 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
     def get_user_avatar(self):
         # دریافت آواتار کاربر
         if self.user.is_authenticated:
+            print("url avatar", self.user.userprofile.avatar)
             return self.user.userprofile.avatar.url if self.user.userprofile.avatar else '/static/profiles/default.png'
         return '/static/profiles/default.png'
     
@@ -441,20 +471,22 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def save_private_message(self, message, timestamp, recipient_user, file_path=None):
-        from .models import PrivateMessage, Group
-
+        from .models import PrivateMessage
+        from chat.models import PrivateGroup
         slug = slugify(self.room_group_name)
-        group = Group.objects.filter(name=self.room_group_name, slug=slug).first()
+        group = PrivateGroup.objects.filter(name=self.room_group_name, slug=slug).first()
         
         # اگر گروه وجود ندارد، آن را ایجاد می‌کنیم
         if not group:
-            group = Group.objects.create(
+            group = PrivateGroup.objects.create(
                 name=self.room_group_name,
                 slug=slug,
-                type='public',  # نوع گروه را مشخص کنید، مثلاً عمومی یا خصوصی
-                created_by=self.user  # به عنوان کاربری که پیام می‌فرستد، گروه را ایجاد می‌کند
+                # type='public',  # نوع گروه را مشخص کنید، مثلاً عمومی یا خصوصی
+                created_by=self.user,  # به عنوان کاربری که پیام می‌فرستد، گروه را ایجاد می‌کند
+                target_user = recipient_user
             )
             group.members.add(self.user)  # افزودن ایجاد کننده به اعضای گروه
+            group.members.add(recipient_user)  # افزودن ایجاد کننده به اعضای گروه
         
         PrivateMessage.objects.create(
             sender=self.user,
@@ -462,7 +494,7 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
             content=message if not file_path else '',
             file=file_path,
             timestamp=timestamp,
-            group=Group.objects.get(name=group),
+            pvgroup=PrivateGroup.objects.get(name=group),
         )
 
 
@@ -497,7 +529,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
         result = ""
         if test == 'akbar':
-            result = "hello"
+            result = "pv"
             # ارسال پیام hello به کاربر خاص
             await self.send_to_all_users(result)
         else:

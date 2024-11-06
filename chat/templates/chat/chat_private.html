@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>چت خصوصی</title>
+    {% load static %} <!-- بارگذاری تگ static -->
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
         body {
@@ -71,7 +72,20 @@
 <body class="container mt-4">
     <h1 class="text-center mb-4">چت خصوصی با {{ target_username }}</h1>
 
-    <div id="chat-log"></div>
+    <div id="chat-log" class="mb-3">
+        {% for message in messages %}
+            <div class="message">
+                {% if message.sender.userprofile.avatar %}
+                    <img src="{{ message.sender.userprofile.avatar.url }}" alt="Avatar" class="avatar" width="40" height="40">
+                {% else %}
+                    <img src="{% static 'profiles/default.png' %}" alt="Default Avatar" class="avatar" width="40" height="40">
+                {% endif %}
+                <strong>{{ message.sender.username }}</strong>: {{ message.content }}
+                <br>
+                <small>{{ message.timestamp }}</small>
+            </div>
+        {% endfor %}
+    </div>
 
     <div class="input-group">
         <input type="text" id="chat-message-input" placeholder="پیام خود را بنویسید..." />
@@ -103,17 +117,19 @@
                              (currentUsername > targetUsername ? currentUsername : targetUsername);
 
             const chatSocket = new WebSocket(
-                'ws://' + window.location.host + '/ws/private_chat/' + roomName + '/'
+                'ws://' + window.location.host + '/cht/ws/private_chat/' + roomName + '/'
             );
+            console.log("esme pv" ,  chatSocket)
 
             const notification = new WebSocket(
-                'ws://' + window.location.host + '/ws/notifications/' + targetUsername + '/'
+                'ws://' + window.location.host + '/cht/ws/notifications/' + targetUsername + '/'
             );
 
             chatSocket.onmessage = function(e) {
                 console.log("taki", e)
 
                 const data = JSON.parse(e.data);
+                console.log(data); // این خط را اضافه کنید برای دیباگ
                 const newMessage = document.createElement('div');
                 newMessage.classList.add('message');
 
@@ -196,6 +212,8 @@
                     reader.readAsDataURL(file); // Convert the file to base64
                 } else {
                     chatSocket.send(JSON.stringify(dataToSend));
+                    console.log(dataToSend)
+                    
                     notification.send(JSON.stringify(sendNotification))
                 }
 

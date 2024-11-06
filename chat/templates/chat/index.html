@@ -67,7 +67,8 @@
             <button type="submit" class="btn btn-primary">جستجو</button>
         </form>
 
-        <!-- لیست گروه‌ها -->
+        <!-- لیست گروه‌های عمومی -->
+        <h2>گروه‌های عمومی</h2>
         <div class="group-list">
             {% for group in groups %}
                 <div class="group-item">
@@ -77,6 +78,17 @@
                         <a href="{% url 'delete_group' group.slug %}" class="btn btn-block delete-group"><div class="dlt">حذف گروه</div></a>  <!-- دکمه حذف گروه -->
                     {% endif %}
                     <a href="{% url 'group_chat' group.slug %}">Join Chat</a>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- لیست گروه‌های خصوصی -->
+        <h2>گروه‌های خصوصی</h2>
+        <div class="group-list">
+            {% for private_group in private_groups %}
+                <div class="group-item">
+                    <h3>{{ private_group.name }}</h3>
+                    <a href="{% url 'private_chat' private_group.pv_url %}">Join Private Chat</a>
                 </div>
             {% endfor %}
         </div>
