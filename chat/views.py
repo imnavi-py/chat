@@ -62,7 +62,20 @@ def index(request):
             groups = groups.filter(name__icontains=search_term)
             private_groups = private_groups.filter(name__icontains=search_term)  # جستجو برای گروه‌های خصوصی
 
-        return render(request, 'chat/index.html', {'groups': groups, 'private_groups': private_groups, 'search_form': search_form})
+        # بررسی شرط و تنظیم مقدار `pv_url` برای هر گروه خصوصی
+        current_username = request.user.username
+        for private_group in private_groups:
+            # اگر نام کاربری فعلی برابر با target_user باشد
+            if private_group.target_user.username == current_username:
+                private_group.pv_url = private_group.created_by.username  # مقدار pv_url را برابر با created_by.username قرار می‌دهیم
+                private_group.save()  # تغییرات را ذخیره می‌کنیم
+
+        # ارسال داده‌ها به قالب
+        return render(request, 'chat/index.html', {
+            'groups': groups,
+            'private_groups': private_groups,
+            'search_form': search_form
+        })
     else:
         return redirect('login')
 
@@ -419,6 +432,7 @@ class ListGroupsAPIView(APIView):
 
         # ساخت لیست از گروه‌ها
         group_list = []
+
         for group in groups:
             group_data = {
                 "id": group.id,
@@ -434,21 +448,17 @@ class ListGroupsAPIView(APIView):
             if isinstance(group, PrivateGroup):
                 selfuser = self.get_user_from_token(tokenAccess)
                 selfuser_username = selfuser.username if hasattr(selfuser, 'username') else ""
-                print("This is the user:",selfuser,"55")
                 group_data["target_user"] = group.target_user.username if group.target_user else None
-                # group_data["selfuser"] = selfuser
+                getpv = ""
+                    #  print(group.target_user.username==selfuser_username)
+                if group.target_user.username == selfuser_username:
+                    print("yes")
+                    group.pv_url = group.created_by.username
+
+                    print(group.pv_url)
+                group_data["pv_url"] = group.pv_url
+
     
-                # بررسی شرط: اگر target_user.username برابر با user از token باشد
-                if group.target_user and self.get_user_from_token(tokenAccess):
-                    print("in target:",group.target_user.username,"55")
-                    print(group.target_user.username==selfuser_username)
-                    if group.target_user.username == selfuser_username:
-                        print("in bayad neshun dade beshe")
-                        group_data["pv_url"] = group.created_by.username  # اگر برابر بود
-                    else:
-                        group_data["pv_url"] = group.target_user.username  # در غیر این صورت
-                else:
-                    group_data["pv_url"] = None  # اگر target_user وجود نداشت یا هیچ user از token نباشد
                 
                 # حذف فیلد 'type' برای PrivateGroup
                 group_list.append(group_data)
@@ -477,6 +487,18 @@ class GroupChatAPIView(APIView):
                 return Response({"message": f"{username} به گروه اضافه شد."}, status=status.HTTP_200_OK)
             except User.DoesNotExist:
                 return Response({"error": "کاربر یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+        
+
+         # حذف کاربر از گروه
+        elif 'remove_member' in request.data:
+            username = request.data.get('username')
+            try:
+                user_to_remove = User.objects.get(username=username)
+                group.members.remove(user_to_remove)
+                return Response({"message": f"{username} از گروه حذف شد."}, status=status.HTTP_200_OK)
+            except User.DoesNotExist:
+                return Response({"error": "کاربر یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+            
 
         # ارسال پیام خصوصی
         elif 'send_private_message' in request.data:

@@ -149,6 +149,7 @@
                     const newFileMessage = document.createElement('div');
                     newFileMessage.classList.add('message');
                     newFileMessage.innerHTML = `
+                        <img src="${data.avatar_url}" alt="Avatar" class="avatar" width="40" height="40" style="border-radius: 50%; margin-right: 10px;">
                         <strong>${data.sender}:</strong> <a href="${data.file}">${data.filename}</a>
                     `;
                     chatMessages.appendChild(newFileMessage);
@@ -229,6 +230,8 @@
                 chatSocket.send(JSON.stringify({
                     'file': event.target.result,
                     'filename': file.name,
+                    'recipient':targetUsername,
+                    'sender': currentUsername,
                 }));
             };
             reader.readAsDataURL(file);

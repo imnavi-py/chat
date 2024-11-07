@@ -268,25 +268,84 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
         except Token.DoesNotExist:
             return None
     async def connect(self):
-        
         self.username = self.scope['url_route']['kwargs']['username']
         self.room_group_name = f'{self.username}'
         self.user = self.scope['user']
 
+        if self.user.is_authenticated:
+            print("User is connected:", self.user.username)
+            # Join the group and accept the connection if the user is authenticated
+            await self.channel_layer.group_add(
+                self.username,
+                self.channel_name
+            )
+
+            # Send previous messages to the user
+            await self.send_previous_messages()
+
+            await self.accept()
+            return
+
+        # If the user is not authenticated, use a token to authenticate
         token = "00a289d2fabae9baacbb83eeb47d7cb5e3197317"
-
         self.token = token
-
         self.user = await self.get_user_from_token(self.token) if self.token else None
         print(self.user)
-  
-        # ملحق شدن به گروه
+
+        # Join the group
         await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
+                self.username,
+                self.channel_name
+            )
+
+        # Send previous messages to the user
+        
 
         await self.accept()
+        await self.send_previous_messages()
+
+    
+    @database_sync_to_async
+    def get_previous_messages(self, recipient_user):
+        from django.db.models import Q
+        from .models import PrivateMessage
+        # Query the PrivateMessage model to get all messages between the current user and the recipient
+        messages = PrivateMessage.objects.filter(
+            (Q(sender=self.user) & Q(recipient=recipient_user)) | 
+            (Q(sender=recipient_user) & Q(recipient=self.user))
+        ).order_by('timestamp')  # Order by timestamp
+
+        # Prepare the messages in the required format
+        return [
+            {
+                'sender': message.sender.username,
+                'content': message.content,
+                'timestamp': message.timestamp.isoformat(),
+                'file': message.file.url if message.file else None,
+            }
+            for message in messages
+        ]
+
+    async def send_previous_messages(self):
+        # دریافت کاربر از آدرس URL
+        recipient_user = await self.get_user(self.username)
+        
+        # بررسی اینکه کاربر پیدا شده یا نه
+        if not recipient_user:
+            print(f"کاربری با نام {self.username} پیدا نشد.")
+            return
+        
+        # دریافت پیام‌های قبلی
+        previous_messages = await self.get_previous_messages(recipient_user)
+
+        # چاپ پیام‌ها برای دیباگ
+        print(f"پیام‌های قبلی برای {recipient_user.username}: {previous_messages}")
+
+        # ارسال پیام‌های قبلی به WebSocket
+        await self.send(text_data=json.dumps({
+            'type': 'previous_messages',
+            'messages': previous_messages,
+        }))
 
     async def disconnect(self, close_code):
         # Leave room group
@@ -316,6 +375,7 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
             # print(f"Sender is: {sender}")
             # print(data)
             recipientuser = await self.get_user(recipient)
+            print("reciepent",recipientuser)
             await self.save_private_message(message,timestamp, recipientuser)
             # ارسال پیام به گروه
             await self.channel_layer.group_send(
@@ -345,36 +405,91 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
             file_content = data['file']
             original_filename = data['filename']
             saved_filename = await self.save_file(file_content, original_filename)
+            sender = self.user.username,
+            recipient = data['recipient'] 
 
+
+            print("in recipient: " , recipient)
+
+            recipientuser = await self.get_user(recipient)
+
+            print("in recipientuser: ", recipientuser)
+
+            user_avatar_url = await self.get_user_avatar()
             # Save the file path in the database
-            await self.save_message('', self.get_current_time(), saved_filename)  # Empty message for file uploads
+            await self.save_message('', self.get_current_time(), saved_filename,)  # Empty message for file uploads
 
             # Send file information to the group
             await self.channel_layer.group_send(
-                self.group_slug,
+                self.room_group_name,
                 {
                     'type': 'chat_file',
                     'file': f"{settings.MEDIA_URL}{saved_filename}",  # Updated URL for file
                     'filename': saved_filename,
-                    'user': self.user.username,
+                    'sender': self.user.username,
+                    'recipientuser': recipientuser,
+                    'avatar_url': user_avatar_url,
+
                 }
             )
+
+    async def chat_file(self, event):
+        # این متد باید اطلاعات مربوط به فایل را از رویداد (event) دریافت کرده و به WebSocket ارسال کند.
+        file_url = event['file']
+        filename = event['filename']
+        sender = self.user.username
+        recipientuser = event['recipientuser']
+        user_avatar_url = await self.get_user_avatar()
+
+        recipient_username = recipientuser.username  # یا هر ویژگی دیگر که نیاز دارید
+
+        # ارسال پیام به WebSocket
+        await self.send(text_data=json.dumps({
+            'type': 'chat_file',
+            'file': file_url,
+            'filename': filename,
+            'recipientuser': recipient_username,
+            'sender' : sender,
+            'avatar_url': user_avatar_url
+        }))
+
+    @database_sync_to_async
+    def save_message(self, message, timestamp, file_path=None):
+        from .models import PrivateMessage, PrivateGroup
+
+        # پیدا کردن گروه خصوصی (PrivateGroup)
+        private_group = PrivateGroup.objects.get(name=self.room_group_name)
+
+        # پیدا کردن کاربر ارسال‌کننده و دریافت‌کننده
+        sender = self.user  # فرض بر اینکه self.user همان کاربر ارسال‌کننده است
+        recipient = private_group.target_user  # دریافت‌کننده پیام (target_user)
+
+        # ذخیره پیام خصوصی در پایگاه داده
+        PrivateMessage.objects.create(
+            sender=sender,
+            recipient=recipient,
+            content=message,
+            file=file_path,  # مسیر فایل
+            timestamp=timestamp,  # زمان پیام
+            pvgroup=private_group  # اشاره به گروه خصوصی
+        )
+
+        
     @database_sync_to_async
     def get_user(self, username):
         from django.contrib.auth import get_user_model
         User = get_user_model()
-        return User.objects.get(username=username)
+        return User.objects.filter(username=username).first()  # به‌جای get از first استفاده کنید
 
 
     async def chat_message(self, event):
         message = event['message']
         sender = event['sender']
         user_avatar_url = await self.get_user_avatar()
-        # print("karbar : ", sender ,"ersal kard" , user_avatar_url)
-
 
         # Send message to WebSocket
         await self.send(text_data=json.dumps({
+            'type': 'chat_message',
             'message': message,
             'sender': sender,
             'avatar_url': user_avatar_url,
@@ -475,6 +590,8 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
         from chat.models import PrivateGroup
         slug = slugify(self.room_group_name)
         group = PrivateGroup.objects.filter(name=self.room_group_name, slug=slug).first()
+
+        
         
         # اگر گروه وجود ندارد، آن را ایجاد می‌کنیم
         if not group:
@@ -483,7 +600,8 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
                 slug=slug,
                 # type='public',  # نوع گروه را مشخص کنید، مثلاً عمومی یا خصوصی
                 created_by=self.user,  # به عنوان کاربری که پیام می‌فرستد، گروه را ایجاد می‌کند
-                target_user = recipient_user
+                target_user = recipient_user,
+                pv_url = recipient_user
             )
             group.members.add(self.user)  # افزودن ایجاد کننده به اعضای گروه
             group.members.add(recipient_user)  # افزودن ایجاد کننده به اعضای گروه

@@ -87,8 +87,12 @@
         <div class="group-list">
             {% for private_group in private_groups %}
                 <div class="group-item">
-                    <h3>{{ private_group.name }}</h3>
-                    <a href="{% url 'private_chat' private_group.pv_url %}">Join Private Chat</a>
+                    {% if private_group.pv_url %}
+                    <h3>{{ private_group.pv_url }}</h3>
+                        <a href="{% url 'private_chat' private_group.pv_url %}">Join Private Chat</a>
+                    {% else %}
+                        <p>Private chat URL is not available.</p>
+                    {% endif %}
                 </div>
             {% endfor %}
         </div>
