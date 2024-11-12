@@ -280,7 +280,7 @@ class LoginView(APIView):
 
     ##API
 
-tokenAccess = "3f6b57c057236ffb01f342d929a7110d4dedbacd"
+tokenAccess = ""
 def get_user_from_token(self, token):
         try:
             # فرض می‌کنیم توکن یک شناسه کاربر است
