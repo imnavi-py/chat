@@ -12,10 +12,6 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 import os
 from pathlib import Path
-from config.lib import setting
-import env
-from corsheaders.defaults import default_headers
-
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -63,43 +59,30 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # یا پورت دیگر که از آن استفاده می‌کنید
-    "https://dev3.nargil.co",
-    "http://localhost:4200",
-    "https://demo.nargil.co"
+    "https://dev3.nargil.co"
 ]
+CORS_ALLOW_CREDENTIALS = True
+# CORS_ALLOW_ALL_ORIGINS = True
 
 CSRF_TRUSTED_ORIGINS = [
     'https://dev3.nargil.co',
-    'http://localhost:3000',
-    'http://localhost:4200',
-    'https://demo.nargil.co'
-    
 ]
 
-CORS_ALLOW_HEADERS = [
-    'bizid',
-    'roleid',
-]
-
-CORS_ALLOW_HEADERS = list(default_headers) + CORS_ALLOW_HEADERS
-CORS_ALLOW_CREDENTIALS = True  # این تنظیم برای ارسال کوکی‌ها ضروری است
-CORS_ALLOW_ALL_ORIGINS = True
-
-# CHANNEL_LAYERS = {
-#     'default': {
-#         'BACKEND': 'channels.layers.InMemoryChannelLayer',
-#     },
-# }
-
-# اگر از Redis استفاده می‌کنید (اختیاری)
 CHANNEL_LAYERS = {
     'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [("172.40.11.10", 6379)],  # آدرس و پورت Redis
-        },
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
     },
 }
+
+# اگر از Redis استفاده می‌کنید (اختیاری)
+# CHANNEL_LAYERS = {
+#     'default': {
+#         'BACKEND': 'channels_redis.core.RedisChannelLayer',
+#         'CONFIG': {
+#             "hosts": [("127.0.0.1", 6379)],  # آدرس و پورت Redis
+#         },
+#     },
+# }
 
 
 ROOT_URLCONF = 'chatapp.urls'
@@ -127,7 +110,21 @@ WSGI_APPLICATION = 'chatapp.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = env.DATABASES
+DATABASES = {
+     'default': {
+             # mysql or mariadb
+             'ENGINE': 'django.db.backends.mysql',
+             'NAME': 'chat',
+             'USER': 'root',
+             'PASSWORD': 'aVt3.tdOUr]5j@2sz',
+             'HOST': 'dev3.nargil.co',
+             'PORT': '3306',
+             'OPTIONS': {
+                'charset': 'utf8mb4',  # استفاده از utf8mb4
+                'init_command': "SET NAMES 'utf8mb4'",  # تنظیم نام‌ها به utf8mb4
+             },
+         }     
+}
 
 
 # Password validation
@@ -165,7 +162,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/cht/static/'
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'chat', 'static')]
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'cht', 'static')]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -173,18 +170,16 @@ STATICFILES_DIRS = [os.path.join(BASE_DIR, 'chat', 'static')]
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-MEDIA_URL = '/cht/media/'
+
+MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 ASGI_APPLICATION = 'chatapp.asgi.application'
 
 
 # LOGIN_URL = 'chat/login/'
 # REST Framework Settings
-# REST_FRAMEWORK = {
-#     "DEFAULT_AUTHENTICATION_CLASSES": [
-#         "rest_framework.authentication.TokenAuthentication",
-#     ],
-# }
-REST_FRAMEWORK = setting.REST_FRAMEWORK
-CACHES = setting.CACHES
-# AUTH_USER_MODEL = 'chat.BaseUser'
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+}

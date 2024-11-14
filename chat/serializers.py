@@ -14,17 +14,18 @@
 #         user.save()
 #         return user
 
+
+
+
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from .models import Group
+from .models import BaseUser, Group, PrivateGroup, PrivateMessage
 from .utils import convert_to_ascii  # فرض کنید این تابع برای تبدیل به ASCII است
 from rest_framework import serializers
 from .models import Group, Message, UserProfile
 from django.contrib.auth.models import User  # Import User model
-
-
 
 class CreateGroupAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -68,38 +69,43 @@ class CreateGroupAPIView(APIView):
 
 
 
-
 class MessageSerializer(serializers.ModelSerializer):
-    user_name = serializers.ReadOnlyField(source='user.username')
+    user_name = serializers.CharField(source='user.first_name_fa', read_only=True)
     avatar = serializers.ImageField(source='user.userprofile.avatar', read_only=True)
     
+    # اصلاح فیلد 'user' برای تبدیل شناسه به شیء BaseUser
+    user = serializers.PrimaryKeyRelatedField(queryset=BaseUser.objects.all(), required=True)
+    group = serializers.PrimaryKeyRelatedField(queryset=Group.objects.all(), required=True)
+
     class Meta:
         model = Message
-        fields = ['id', 'content', 'timestamp', 'user', 'user_name', 'avatar', 'file']
+        fields = ['id', 'content', 'timestamp', 'user', 'user_name', 'avatar', 'group', 'file']
+
+
 
 class UserProfileSerializer(serializers.ModelSerializer):
     is_superuser = serializers.BooleanField(source='user.is_superuser', read_only=True)
-    username = serializers.CharField(source='user.username', read_only=True)  # اضافه کردن فیلد نام کاربری
+    # username = serializers.CharField(source='user.username', read_only=True)  # اضافه کردن فیلد نام کاربری
 
     class Meta:
         model = UserProfile
-        fields = ['id', 'user', 'first_name', 'last_name', 'avatar', 'is_superuser', 'username']
+        fields = ['id', 'user', 'first_name', 'last_name', 'avatar', 'is_superuser']
 
 class MemberSerializer(serializers.ModelSerializer):
     username = serializers.ReadOnlyField(source='user.username')
     is_superuser = serializers.BooleanField(source='user.is_superuser', read_only=True)
-    print("super usere ?" ,is_superuser)
+
 
     class Meta:
         model = UserProfile
         fields = ['id', 'username', 'is_superuser']  # فیلدهای مورد نیاز
 
 class GroupSerializer(serializers.ModelSerializer):
-    members = MemberSerializer(many=True, read_only=True)  # استفاده از MemberSerializer
+    members = MemberSerializer(many=True, read_only=True)
 
     class Meta:
         model = Group
-        fields = ['id', 'name', 'slug', 'type', 'members']  # حذف members_names چون اطلاعاتش در MemberSerializer است
+        fields = ['id', 'name', 'slug', 'type', 'members']# حذف members_names چون اطلاعاتش در MemberSerializer است
 
 class GroupChatSerializer(serializers.Serializer):
     group = GroupSerializer()
@@ -114,3 +120,43 @@ class GroupChatSerializer(serializers.Serializer):
         representation = super().to_representation(instance)
         representation['members'] = [MemberSerializer(member).data for member in instance.members.all()]
         return representation
+    
+## Private Group
+
+class PrivateMessageSerializer(serializers.ModelSerializer):
+    sender_name = serializers.CharField(source='sender.first_name_fa', read_only=True)
+    sender_avatar = serializers.ImageField(source='sender.userprofile.avatar', read_only=True)
+    recipient_name = serializers.CharField(source='recipient.first_name_fa', read_only=True)
+    recipient_avatar = serializers.ImageField(source='recipient.userprofile.avatar', read_only=True)
+
+    # اصلاح فیلدهای sender و recipient برای تبدیل شناسه به شیء BaseUser
+    sender = serializers.PrimaryKeyRelatedField(queryset=BaseUser.objects.all(), required=True)
+    recipient = serializers.PrimaryKeyRelatedField(queryset=BaseUser.objects.all(), required=True)
+    pvgroup = serializers.PrimaryKeyRelatedField(queryset=PrivateGroup.objects.all(), required=True)
+
+    class Meta:
+        model = PrivateMessage
+        fields = ['id', 'content', 'timestamp', 'sender', 'sender_name', 'sender_avatar', 
+                  'recipient', 'recipient_name', 'recipient_avatar', 'file', 'pvgroup']
+
+class PrivateGroupMemberSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    avatar = serializers.ImageField(source='avatar', read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = ['id', 'username', 'avatar']
+
+
+
+class PrivateGroupSerializer(serializers.ModelSerializer):
+    members = MemberSerializer(many=True, read_only=True)
+    messages = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PrivateGroup
+        fields = ['id', 'name', 'slug', 'members', 'messages']
+
+    def get_messages(self, obj):
+        messages = PrivateMessage.objects.filter(pvgroup=obj).order_by('timestamp')
+        return PrivateMessageSerializer(messages, many=True).data

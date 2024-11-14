@@ -1,48 +1,48 @@
-import json
+
+
+from uuid import UUID
+import uuid
 from django.db import IntegrityError
 from django.http import JsonResponse
 from django.shortcuts import render
-from django.contrib.auth.forms import UserCreationForm
 from django.shortcuts import render
 from django.shortcuts import render, get_object_or_404
-from django.views import View
+import httpx
+
 
 from chat.forms import GroupSearchForm, UserLoginForm, UserProfileForm, UserRegistrationForm
-from chat.utils import convert_to_ascii, set_auth_cookie
-from chatapp.lib.ApiResponse import ApiResponse
-from .models import Group, Message, PrivateGroup, PrivateMessage, UserProfile
-
+from chat.serializers import PrivateGroupSerializer
+from chat.utils import convert_to_ascii
+from config.lib.ApiResponse import ApiResponse
+from config.lib.api import get_info
+from config.lib.setting import API
+from .models import BaseUser, Group, Message, PrivateGroup, PrivateMessage, UserProfile
 from django.shortcuts import render, redirect
 from .models import Group
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import logout
 from django.shortcuts import redirect
-from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.models import User
 from django.db.models import Q
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
 from django.views.decorators.csrf import csrf_exempt
-
-
 from django.contrib.auth import authenticate
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from datetime import datetime, timedelta
-
-
-
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
-
-
+from rest_framework.decorators import api_view
 from .models import Group, Message, UserProfile
-from .serializers import MemberSerializer, MessageSerializer, UserProfileSerializer
+from .serializers import  MessageSerializer, UserProfileSerializer
 from django.utils.translation import gettext_lazy as _
-
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from .models import Group
+from .utils import convert_to_ascii  # فرض کنید این تابع برای تبدیل به ASCII است
+from django.contrib.auth.models import User
+from rest_framework.exceptions import AuthenticationFailed
 
 # @login_required(login_url = 'chat/login.html')
 # views.py
@@ -280,7 +280,7 @@ class LoginView(APIView):
 
     ##API
 
-tokenAccess = ""
+tokenAccess = "868af6b0f862d5e91553a3202ed7a923b825cd97"
 def get_user_from_token(self, token):
         try:
             # فرض می‌کنیم توکن یک شناسه کاربر است
@@ -292,15 +292,7 @@ def get_user_from_token(self, token):
         except User.DoesNotExist:
             raise AuthenticationFailed('کاربر یافت نشد.')
         
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from .models import Group
-from .utils import convert_to_ascii  # فرض کنید این تابع برای تبدیل به ASCII است
-from asgiref.sync import sync_to_async
-from django.contrib.auth.models import User
-from rest_framework.exceptions import AuthenticationFailed
+
         
 def authenticate_user_with_token(token):
     try:
@@ -322,64 +314,33 @@ def authenticate_user_with_token(token):
         raise AuthenticationFailed('کاربر یافت نشد.')
     
 class CreateGroupAPIView(APIView):
-    # permission_classes = [IsAuthenticated]
-    authentication_classes = []
-    def get_user_from_token(self, token):
-        try:
-            # فرض می‌کنیم توکن یک شناسه کاربر است
-            user = User.objects.get(auth_token=token)  # یا شناسه کاربر
-            if user.is_active:
-                return user
-            else:
-                raise AuthenticationFailed('کاربر غیرفعال است.')
-        except User.DoesNotExist:
-            raise AuthenticationFailed('کاربر یافت نشد.')
-    
-    
-        
     def post(self, request):
-
-        # توکن ثابت برای تست
+        if not request.user.is_authenticated:
+            return Response({"error": "برای ایجاد گروه باید وارد سیستم شوید."}, status=status.HTTP_401_UNAUTHORIZED)
         
+        user = BaseUser.objects.get(id=request.user.id)  # بارگیری کاربر به عنوان نمونه BaseUser
 
-        # احراز هویت کاربر با توکن ثابت
-        try:
-            self.user = self.get_user_from_token(tokenAccess)
-            print(self.user.is_superuser)
-        except AuthenticationFailed as e:
-            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+        # if not user.is_superuser:
+        #     return Response({"error": "شما اجازه ایجاد گروه را ندارید."}, status=status.HTTP_403_FORBIDDEN)
         
-        if not self.user.is_superuser:
-            return Response({"error": "شما اجازه ایجاد گروه را ندارید."}, status=status.HTTP_403_FORBIDDEN)
-            
         group_name = request.data.get('group_name')
-        slug = request.data.get('slug')
+        slug = request.data.get('slug') or convert_to_ascii(group_name)
         group_type = request.data.get('type')
 
-        ascii_group_name = convert_to_ascii(group_name)
-
-        if not slug:
-            slug = convert_to_ascii(group_name)
-
-        # بررسی وجود گروه با نام مشابه
         if Group.objects.filter(name=group_name).exists():
             return Response({"error": "این نام گروه قبلاً استفاده شده است."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # بررسی وجود نامک مشابه
+        
         if Group.objects.filter(slug=slug).exists():
             return Response({"error": "این نامک قبلاً استفاده شده است."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ایجاد گروه
-        group = Group.objects.create(name=group_name, slug=convert_to_ascii(slug), created_by=self.user, type=group_type)
-        group.members.add(self.user)
-        print(group.created_by.username,)
+        group = Group.objects.create(name=group_name, slug=slug, created_by=user, type=group_type)
+        group.members.add(user)
 
-        # پاسخ با اطلاعات گروه جدید
         response_data = {
             "id": group.id,
             "name": group.name,
             "slug": group.slug,
-            "created_by": group.created_by.username,
+            "created_by": group.created_by.first_name_fa + group.created_by.last_name_fa,
             "type": group.type,
             "members_count": group.members.count(),
         }
@@ -390,41 +351,58 @@ class CreateGroupAPIView(APIView):
 
 class ListGroupsAPIView(APIView):
     def get(self, request):
-        # دریافت پارامتر type از درخواست
+        # بررسی اینکه آیا کاربر احراز هویت شده است یا خیر
+        if not request.user.is_authenticated:
+            return Response({"error": "برای مشاهده گروه‌ها باید وارد سیستم شوید."}, status=status.HTTP_401_UNAUTHORIZED)
+
         group_type = request.query_params.get('type', None)
 
-        # بررسی نوع گروه دریافتی
+        # فیلتر کردن گروه‌ها بر اساس نوع
         if group_type == 'Group':
-            # اگر نوع Group ارسال شد
             groups = Group.objects.all()
         elif group_type == 'PrivateGroup':
-            # اگر نوع PrivateGroup ارسال شد
             groups = PrivateGroup.objects.all()
         else:
-            # اگر هیچ پارامتر type ارسال نشده یا نوع دیگری ارسال شده، تمام گروه‌ها از Group بازیابی می‌شود
-            groups = Group.objects.all()
+            groups = Group.objects.all() 
 
-        # ساخت لیست از گروه‌ها
         group_list = []
         for group in groups:
-            group_data = {
-                "id": group.id,
-                "name": group.name,
-                "slug": group.slug,
-                "created_by": group.created_by.username,
-                "members_count": group.members.count(),
-            }
-            
-            # اگر گروه از نوع PrivateGroup باشد، فیلد 'type' را نمایش ندهید
+            # بررسی اینکه آیا کاربر عضو گروه است یا نه
             if isinstance(group, PrivateGroup):
-                # حذف فیلد 'type' برای PrivateGroup
-                group_list.append(group_data)
-            else:
-                # در غیر این صورت، فیلد 'type' را اضافه کن
-                group_data["type"] = group.type
-                group_list.append(group_data)
+                # برای گروه‌های خصوصی بررسی می‌کنیم که آیا کاربر در فیلدهای created_by یا target_user قرار دارد
+                if group.created_by.id == request.user.id or (group.target_user and group.target_user.id == request.user.id):
+                    group_data = {
+                        "id": group.id,
+                        "name": group.name,
+                        "slug": group.slug,
+                    }
+                    
+                    user_name = ""
+                    # اطلاعات اضافی برای گروه‌های خصوصی
+                    group_data["created_by"] = group.created_by.first_name_fa +" "+ group.created_by.last_name_fa
+                    group_data["target_user"] = group.target_user.first_name_fa +" "+ group.target_user.last_name_fa if group.target_user else None
+                    group_data["members_count"] = group.members.count()
+                    if request.user.first_name_fa == group.created_by.first_name_fa:
+                        user_name = group.target_user.first_name_fa +" "+ group.target_user.last_name_fa
+                    else:
+                        user_name =  group.created_by.first_name_fa +" "+ group.created_by.last_name_fa
 
-        # ارسال داده‌ها به عنوان Response
+                    group_data["user_name"] = user_name
+                    
+                    group_list.append(group_data)
+
+            elif isinstance(group, Group):
+                # برای گروه‌های عمومی بررسی می‌کنیم که آیا کاربر عضو گروه است
+                if group.members.filter(id=request.user.id).exists():
+                    group_data = {
+                        "id": group.id,
+                        "name": group.name,
+                        "slug": group.slug,
+                        "created_by": group.created_by.first_name_fa +" "+ group.created_by.last_name_fa,
+                        "members_count": group.members.count(),
+                    }
+                    group_list.append(group_data)
+
         return Response(group_list, status=status.HTTP_200_OK)
     
 
@@ -433,77 +411,203 @@ class GroupChatAPIView(APIView):
 
 
     def post(self, request, slug):
+        # بررسی وجود گروه با نام (slug) مشخص شده
         group = get_object_or_404(Group, slug=slug)
 
-        # اضافه کردن کاربر جدید
-        if 'add_member' in request.data:
-            username = request.data.get('username')
-            try:
-                user_to_add = User.objects.get(username=username)
-                group.members.add(user_to_add)
-                return Response({"message": f"{username} به گروه اضافه شد."}, status=status.HTTP_200_OK)
-            except User.DoesNotExist:
-                return Response({"error": "کاربر یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+        # دریافت uuid کاربر از درخواست و اعتبارسنجی آن
+        user_uuid = request.data.get('uuid')
+        
+        # بررسی اینکه uuid ارسال شده و معتبر باشد
+        if not user_uuid:
+            return Response({"error": "UUID کاربر ارسال نشده است."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # تبدیل مقدار uuid به یک شیء UUID
+            user_uuid = UUID(user_uuid)
+            # یافتن کاربر بر اساس uuid
+            user = BaseUser.objects.get(id=user_uuid)
+        except (ValueError, TypeError):
+            return Response({"error": "UUID معتبر نیست."}, status=status.HTTP_400_BAD_REQUEST)
+        except BaseUser.DoesNotExist:
+            return Response({"error": "کاربر یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
 
-        # ارسال پیام خصوصی
-        elif 'send_private_message' in request.data:
-            target_username = request.data.get('target_username')
-            message_content = request.data.get('message')
-            try:
-                target_user = User.objects.get(username=target_username)
-                # اینجا می‌توانید پیام را ذخیره کنید
-                Message.objects.create(group=group, sender=request.user, content=message_content)
-                return Response({"message": "پیام خصوصی ارسال شد."}, status=status.HTTP_200_OK)
-            except User.DoesNotExist:
-                return Response({"error": "کاربر یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+        # بررسی عملیات افزودن یا حذف کاربر از گروه
+        if request.data.get('action') == 'add_member':
+            # اضافه کردن کاربر به گروه
+            group.members.add(user)
+            user_data = {
+                "id": str(user.id),
+                "nationalcode": user.nationalcode,
+                "first_name_fa": user.first_name_fa,
+                "last_name_fa": user.last_name_fa,
+                "usr_avatar": user.usr_avatar
+            }
+            return Response({
+                "message": f"کاربر با نام {user.first_name_fa + user.last_name_fa} به گروه {group.name} اضافه شد.",
+                "user": user_data
+            }, status=status.HTTP_200_OK)
 
-        return Response({"error": "عملیات نامعتبر است."}, status=status.HTTP_400_BAD_REQUEST)
+        elif request.data.get('action') == 'remove_member':
+            # حذف کاربر از گروه
+            group.members.remove(user)
+            return Response({
+                "message": f"کاربر با کد ملی {user.first_name_fa + user.last_name_fa} از گروه {group.name} حذف شد."
+            }, status=status.HTTP_200_OK)
+
+        # اگر هیچ کدام از پارامترهای add_member یا remove_member موجود نباشد
+        return Response({"error": "پارامتر add_member یا remove_member ارسال نشده است."}, status=status.HTTP_400_BAD_REQUEST)
     
 
+@api_view(['GET'])
+def save_user_data(request):
+    # ابتدا بررسی می‌کنیم که کاربر احراز هویت شده باشد
+    print("this is:",request.user)
+    if request.user.is_authenticated:
+        # پرینت کردن مقدار request.user برای بررسی داده‌ها
+        print("User Data:", request.user)
+        print("User Avatar:", request.user.avatar_url)
 
+        # جستجو با استفاده از UUID
+        try:
+            user_data = BaseUser.objects.get(id=request.user.id)
+            # اگر کاربر پیدا شد، اطلاعات را به‌روزرسانی می‌کنیم
+            user_data.first_name_fa = request.user.first_name_fa
+            user_data.first_name_en = request.user.first_name_en
+            user_data.last_name_fa = request.user.last_name_fa
+            user_data.last_name_en = request.user.last_name_en
+            user_data.usr_avatar = request.user.avatar_url
+            user_data.is_superuser = request.user.is_superuser
+            user_data.token = request.user.token
+            user_data.save()
+            message = "User data updated successfully."
 
+            
+        except BaseUser.DoesNotExist:
+            # اگر کاربر وجود نداشت، یک شیء جدید ایجاد می‌کنیم
+            user_data = BaseUser.objects.create(
+                id=request.user.id,
+                nationalcode=request.user.national_code,
+                first_name_fa=request.user.first_name_fa,
+                first_name_en=request.user.first_name_en,
+                last_name_fa=request.user.last_name_fa,
+                last_name_en=request.user.last_name_en,
+                usr_avatar= request.user.avatar_url if request.user.avatar_url != "Null" else "",
+                is_superuser=request.user.is_superuser,
+                token=request.user.token
+            )
+            message = "User data created successfully."
+
+        return JsonResponse({"message": message})
+    else:
+        return JsonResponse({"error": "User is not authenticated."}, status=401)
 
 @api_view(['GET'])
 def group_chat_api(request, slug):
-    token = tokenAccess  # یا از request.headers.get('Authorization') استفاده کنید
+    # بررسی اینکه کاربر وارد شده باشد
+    if not request.user.is_authenticated:
+        return Response({"error": "برای مشاهده گروه‌ها باید وارد سیستم شوید."}, status=status.HTTP_401_UNAUTHORIZED)
 
-    try:
-        user = Token.objects.get(key=token).user
-    except Token.DoesNotExist:
-        return Response({"error": "Invalid token."}, status=status.HTTP_403_FORBIDDEN)
-
+    user = request.user  # کاربر فعلی
+    userID = BaseUser.objects.get(id=request.user.id)
+    # پیدا کردن گروه بر اساس slug
     group = get_object_or_404(Group, slug=slug)
-    messages = Message.objects.filter(group=group).order_by('timestamp')
-    members = group.members.all()  # دریافت اعضا
-    all_users = User.objects.exclude(id__in=members.values_list('id', flat=True))
-    user_profile = UserProfile.objects.get(user=user)
 
-    # ساخت داده‌ها با استفاده از MemberSerializer
+    # دریافت پیام‌های گروه به ترتیب زمانی
+    messages = Message.objects.filter(group=group).order_by('timestamp')
+
+    # دریافت اعضای گروه
+    members = group.members.all()
+
+    # دریافت کاربران دیگری که عضو گروه نیستند
+    all_users = BaseUser.objects.all()
+
+    # تلاش برای پیدا کردن پروفایل کاربر وارد شده
+    try:
+        user_profile = UserProfile.objects.get(user=userID)
+    except UserProfile.DoesNotExist:
+        return Response({"error": "پروفایل کاربر یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+
+    # لیست اطلاعات اعضای گروه
     members_data = []
     for member in members:
-        user_profile = UserProfile.objects.get(user=member)  # دریافت UserProfile مرتبط
         members_data.append({
-            'id': user_profile.id,
-            'username': user_profile.user.username,
-            'is_superuser': user_profile.user.is_superuser,
+            'id': member.id,
+            'firstname': member.first_name_fa,
+            'lastname': member.last_name_fa,
+            'is_superuser': member.is_superuser,
+            'avatar': member.usr_avatar,  # دریافت آواتار از فیلد usr_avatar در BaseUser
         })
 
-    all_users_data = [{'id': user.id, 'username': user.username} for user in all_users]
+    # لیست کاربران غیرعضو گروه
+    all_users_data = [
+        {
+            'id': user.id,
+            'firstname': user.first_name_fa,
+            'lastname': user.last_name_fa,
+            'avatar': user.usr_avatar  # دریافت آواتار از فیلد usr_avatar در BaseUser
+        } 
+        for user in all_users
+    ]
 
+
+
+
+     # آماده‌سازی پیام‌ها همراه با آواتار کاربران از BaseUser
+    messages_data = []
+    for message in messages:
+        try:
+            user = BaseUser.objects.get(id=message.user.id)
+            avatar = user.usr_avatar if user.userprofile.avatar else None
+        except UserProfile.DoesNotExist:
+            avatar = None
+
+        messages_data.append({
+            'id': message.id,
+            'content': message.content,
+            'timestamp': message.timestamp,
+            'user_id': message.user.id,
+            'user_name': message.user.first_name_fa + " " + message.user.last_name_fa,
+            'avatar': avatar,
+            'group': message.group.id,
+            'file': message.file.url if message.file else None
+        })
+
+    # ساخت داده برای پاسخ
     data = {
         'group': {
             'id': group.id,
             'name': group.name,
             'slug': group.slug,
             'type': group.type,
-            'members': members_data,  # باید اطلاعات کامل اعضا را برگرداند
+            'members': members_data,
         },
-        'messages': MessageSerializer(messages, many=True).data,
+        'messages':  messages_data,
         'all_users': all_users_data,
-        'user_profile': UserProfileSerializer(user_profile).data,
+        'user_profile': UserProfileSerializer(user_profile).data,  # افزودن پروفایل کاربر وارد شده
     }
 
-    return Response(data)
+    return Response(data, status=status.HTTP_200_OK)
+
+
+
+## Private Group
+@api_view(['GET'])
+def private_chat_api(request, slug):
+    
+
+    # بازیابی گروه خصوصی با توجه به نامک
+    private_group = get_object_or_404(PrivateGroup, slug=slug)
+    
+    print(private_group)
+    
+    # بررسی اینکه آیا کاربر جزو اعضای گروه است یا نه
+    if not (private_group.created_by == request.user or private_group.target_user == request.user or private_group.members.filter(id=request.user.id).exists()):
+        return Response({"error": "You are not a member of this private chat group."}, status=status.HTTP_403_FORBIDDEN)
+    
+    # سریالایزر گروه خصوصی با پیام‌ها و اعضا
+    private_group_data = PrivateGroupSerializer(private_group).data
+    
+    return Response({"private_group": private_group_data})
 
 
 ## Get All Users Data
@@ -511,8 +615,8 @@ def group_chat_api(request, slug):
 @api_view(['GET'])
 def all_users_with_groups_api(request):
     # دریافت تمام کاربران
-    all_users = User.objects.all()
-
+    all_users = BaseUser.objects.all()
+    
     # آماده‌سازی داده‌ها با اطلاعات گروه‌ها
     all_users_data = []
     for user in all_users:
@@ -521,8 +625,11 @@ def all_users_with_groups_api(request):
         groups_data = [{'id': group.id, 'name': group.name, 'slug': group.slug, 'type': group.type} for group in groups]
 
         all_users_data.append({
-            'id': user_profile.id,
-            'username': user.username,
+            'profile_id': user_profile.id,
+            'id': user.id,
+            'firstname': user.first_name_fa,
+            'lastname': user.last_name_fa,
+            'avatar': user.usr_avatar,
             'is_superuser': user.is_superuser,
             'groups': groups_data  # لیست گروه‌ها
         })
@@ -534,35 +641,136 @@ def all_users_with_groups_api(request):
 ## User Profile
 
 class UserProfileAPIView(APIView):
-    # permission_classes = [IsAuthenticated]  # احراز هویت برای کاربران لاگین‌کرده
     
-    def get(self, request):
 
-        token = tokenAccess  # یا از request.headers.get('Authorization') استفاده کنید
+
+    
+    def get(self, request, *args, **kwargs):
+        # بررسی اینکه کاربر وارد شده باشد
+        if not request.user.is_authenticated:
+            return Response({"error": "برای مشاهده پروفایل باید وارد سیستم شوید."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # بررسی پارامتر get-all در درخواست
+        get_all = request.query_params.get('get-all', None)
+
+        if get_all and request.user.is_superuser:
+            # اگر پارامتر get-all موجود باشد، تمام پروفایل‌ها را باز می‌گردانیم
+            user_profiles = UserProfile.objects.all()
+            message = "All User Profiles Retrieved"
+            serializer = UserProfileSerializer(user_profiles, many=True)  # توجه: many=True برای لیست کردن تمام پروفایل‌ها
+        else:
+            user = request.user  # کاربر فعلی
+            userID = BaseUser.objects.get(id=request.user.id)
+            try:
+                # تلاش برای پیدا کردن پروفایل کاربر
+                user_profile = UserProfile.objects.get(user=userID)
+                message = "User Profile Found"
+            except UserProfile.DoesNotExist:
+                # اگر پروفایل پیدا نشد، آن را ایجاد می‌کنیم
+                user_profile = UserProfile.objects.create(
+                    first_name=user.first_name_fa,
+                    last_name=user.last_name_fa,
+                    user=userID,
+                    avatar=user.avatar_url
+                )
+                message = "New Profile Created"
+
+            # سریالایزر پروفایل کاربر
+            serializer = UserProfileSerializer(user_profile)
+
+        return Response({
+            "message": message,
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+
+
+
+
+class UserEmployeeView(APIView):
+    def get(self, request, *args, **kwargs):
+        bizid = request.query_params.get('bizid')
+        roleid = request.query_params.get('roleid')
+        token = request.headers.get('Authorization')
+
+        # اطمینان از پر بودن پارامترهای ورودی
+        if not bizid or not roleid or not token:
+            return Response({"error": "پارامترهای لازم وارد نشده است"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # فراخوانی تابع `get_user_employees` به صورت همزمان
+        employees_data = self.get_user_employees(bizid, roleid, token)
+
+        if employees_data is None:
+            return Response({"error": "خطا در دریافت اطلاعات از API"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({"data": employees_data}, status=status.HTTP_200_OK)
+
+    def get_user_employees(self, bizid, roleid, token):
+        try:
+            cookies = {
+                'token': token
+            }
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': token,
+                'bizid': bizid,
+                'roleid': roleid
+            }
+
+            # استفاده از httpx به صورت غیرهمزمان
+            response = httpx.get(
+                f"{API['user_employee_url']}",
+                cookies=cookies,
+                headers=headers
+            )
+
+            if response.status_code == 200:
+                return response.json().get('data', [])
+            else:
+                print(f'Error in receiving employees by API: status={response.status_code}')
+                return []
+
+        except httpx.RequestError as e:
+            print(f'Error related to API: {str(e)}')
+            return None
+    
+
+
+class PrivateChatView(APIView):
+    def get(self, request, userid):
+        if not request.user.is_authenticated:
+            return Response(
+                {"error": "برای مشاهده گروه‌ها باید وارد سیستم شوید."},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
         try:
-            user = Token.objects.get(key=token).user
-        except Token.DoesNotExist:
-            return Response({"error": "Invalid token."}, status=status.HTTP_403_FORBIDDEN)
-        # دریافت پروفایل کاربر یا ایجاد آن در صورت عدم وجود
-        user_profile, created = UserProfile.objects.get_or_create(user=user)
-        serializer = UserProfileSerializer(user_profile)
-        return ApiResponse.success(self, _("User Profile Founded"), serializer.data, status.HTTP_200_OK)
+            user_uuid = UUID(userid)
+            target_user = get_object_or_404(BaseUser, id=user_uuid)
+        except (ValueError, TypeError):
+            return Response({"error": "UUID معتبر نیست."}, status=status.HTTP_400_BAD_REQUEST)
+        current_user_firstname = request.user.first_name_fa
+        current_user_lastname = request.user.last_name_fa
+        current_user_id = request.user.id  # گرفتن id کاربر فعلی
+        target_user_id = target_user.id  # گرفتن id کاربر هدف
 
-    def post(self, request):
-        token = tokenAccess  # یا از request.headers.get('Authorization') استفاده کنید
+        # ساخت یک شناسه جدید با ترکیب id ها
+        combined_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, str(current_user_id) + str(target_user_id))
 
-        try:
-            user = Token.objects.get(key=token).user
-        except Token.DoesNotExist:
-            return Response({"error": "Invalid token."}, status=status.HTTP_403_FORBIDDEN)
-        
-        # دریافت یا ایجاد پروفایل کاربر
-        user_profile, created = UserProfile.objects.get_or_create(user=user)
-        serializer = UserProfileSerializer(user_profile, data=request.data, partial=True)
-        
-        if serializer.is_valid():
-            serializer.save()
-            return ApiResponse.success(self, _("UserProfile Updated"),serializer.data, status.HTTP_200_OK)
-        return ApiResponse.error(self, _("Something went wrong!"),serializer.errors, status.HTTP_400_BAD_REQUEST)
+        # تبدیل combined_uuid به رشته برای استفاده در private_chat_id
+        private_chat_id = f"privatechat_{str(combined_uuid).replace('-', '')}"
+
+        return Response({
+            'private_chat_id': private_chat_id,
+            'first_name': current_user_firstname,
+            'last_name': current_user_lastname ,
+            'target_user': {
+                'userid': target_user.id,
+                'first_name': target_user.first_name_fa,
+                'last_name': target_user.last_name_fa,
+            }
+        }, status=status.HTTP_200_OK)
+
+
 

@@ -20,7 +20,7 @@ from django.urls import include, path
 from django.conf.urls.static import static
 
 urlpatterns = [
-    path('cht/admin/', admin.site.urls),
+    # path('cht/admin/', admin.site.urls),
     path('cht/', include('chat.urls')),  # این خط را اضافه کنید
 ]
 if settings.DEBUG:

@@ -1,0 +1,48 @@
+its work automatically.
+
+
+first add this paragraph to the setting:
+################################
+import config.lib.log.signals
+
+################################################################
+
+
+
+but if in delete method dont delete the object normally
+allow this method to be called
+################################################################
+from config.lib.log.signals import pre_delete_signal
+
+
+def destroy_object:
+            instance = self.get_object()
+            instance.is_active = False  
+            instance.save()
+            pre_delete_signal.send(sender=Role, instance=instance, request=request) #instance may be object of db no query
+
+################################################################
+
+
+
+for save  log as manually allow this method to be called:
+################################################################
+from config.lib.tasks import store_log
+
+same_function:
+    store_log('INFO', 'User logged in', user, 'login', '192.168.1.1', request_data, instance_data, extra_data, additional_info)
+
+##    Args:
+##        level (str): The severity level of the log (e.g., 'INFO', 'ERROR').
+##        message (str): The message content of the log.
+##        user (dict): The user object related to the action. Must have an 'id' attribute.
+##        action (str): A description of the user action being logged.
+##        ip_address (str): The IP address from where the action originated.
+##        request (dict): The details of the HTTP request (headers, body, etc.).
+##        instance (dict): Data about the model instance affected by the action (e.g., object details).
+##        extra_data (dict): Any extra information related to the log.
+##        additional_info (dict): Additional details to be logged (optional).
+##        queue_name (str, optional): The RabbitMQ queue name where the log will be sent. Defaults to 'log'.
+##    
+##    Returns:
+##        None
