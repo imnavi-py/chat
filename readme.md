@@ -1,367 +1,297 @@
-<!DOCTYPE html>
-<html lang="fa">
-<head>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Group Chatroom</title>
-    {% load static %} <!-- بارگذاری تگ static -->
-    <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <style>
-        body {
-            background-color: #e9ecef;
-        }
-        #chat-log {
-            border: 2px solid #007bff;
-            height: 400px;
-            overflow-y: scroll;
-            padding: 20px;
-            background-color: #ffffff;
-            border-radius: 12px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-        }
-        #chat-message-input {
-            width: 80%;
-            border-radius: 30px;
-            padding: 10px;
-            border: 1px solid #ccc;
-        }
-        #chat-file-input {
-            margin-left: 10px;
-        }
-        .message {
-            margin-bottom: 15px;
-            padding: 10px;
-            border-radius: 8px;
-            background-color: #f8f9fa;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        }
-        .input-group {
-            margin-top: 15px;
-        }
-        h1 {
-            color: #007bff;
-            font-weight: bold;
-            font-size: 36px;
-        }
-        .logout-btn, .back-btn {
-            background-color: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 25px;
-            padding: 10px 20px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .logout-btn:hover, .back-btn:hover {
-            background-color: #c82333;
-        }
-        .avatar {
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            margin-right: 10px;
-        }
-        #member-list {
-            border: 2px solid #007bff;
-            border-radius: 10px;
-            padding: 15px;
-            background-color: #ffffff;
-            height: 400px;
-            overflow-y: auto;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-        }
-        .popup {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: #ffffff;
-            border: 2px solid #007bff;
-            padding: 20px;
-            z-index: 1000;
-            border-radius: 12px;
-            text-align: center;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            width: 80%;
-            max-width: 500px;
-        }
-        .popup button {
-            margin: 5px;
-            padding: 12px 25px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 30px;
-            cursor: pointer;
-        }
-        .popup button:hover {
-            background-color: #0056b3;
-        }
-    </style>
-</head>
-<body class="container mt-4">
-    <!-- دکمه خروج -->
-    <a href="{% url 'logout' %}" class="logout-btn">خروج</a>
+# API Documentation
 
+## 1. Create User Model from Token
+**URL**: `https://dev3.nargil.co/cht/save-user-data/`
 
-    <!-- عنوان گروه -->
-    <h1 class="text-center">{{ group.name }}</h1>
+## 2. Create Public Group
 
-    <a href="{% url 'index' %}" class="back-btn">برگشت</a>
+**URL**: `https://dev3.nargil.co/cht/api/groups/create/`
 
-    <div class="row">
-        <!-- پنل چت -->
-        <div class="col-md-8">
-            <div id="chat-log" class="mb-3">
-                {% for message in messages %}
-                    <div class="message">
-                        {% if message.user.userprofile.avatar %}
-                        <a href="{% url 'private_chat' target_username=message.user.username %}">
-                        
-                            <img src="{{ message.user.userprofile.avatar.url }}" alt="Avatar" class="avatar" width="40" height="40">
-                        </a>
-                    {% else %}
-       
-                            <img src="{% static 'profiles/default.png' %}" alt="Default Avatar" class="avatar" width="40" height="40">
-                        
-                    {% endif %}
-                    <strong>
-           
-                            {{ message.user.username }}
-                      
-                    </strong>
-                    {% if message.file %}
-                        <a href="{{ message.file.url }}">{{ message.file.name }}</a> <!-- لینک به فایل -->
-                    {% else %}
-                        {{ message.content }}
-                    {% endif %}
-                    <br>
-                    <small>{{ message.timestamp }}</small>
-                </div>
-                {% endfor %}
-            </div>
+**Request Body**:
 
-            <!-- ورودی پیام و فایل -->
-            <div class="input-group">
-                <input id="chat-message-input" type="text" class="form-control" placeholder="پیام خود را وارد کنید...">
-                <input id="chat-file-input" type="file" class="ml-2">
-                <div class="input-group-append">
-                    <button id="chat-message-submit" class="btn btn-primary">ارسال</button>
-                    <button id="emoji-button">😊</button>
-                    <div id="emoji-list" style="display:none;">
-                        <span class="emoji" data-emoji="😊">😊</span>
-                        <span class="emoji" data-emoji="😂">😂</span>
-                        <span class="emoji" data-emoji="😍">😍</span>
-                        <span class="emoji" data-emoji="😢">😢</span>
-                        <!-- اموجی‌های بیشتر -->
-                    </div>
-                </div>
-            </div>
-        </div>
+```json
+{
+    "group_name": "arash",
+    "slug": "arash",
+    "type": "public"
+}
+**Response:**
 
-        <!-- لیست اعضا -->
-        <div class="col-md-4">
-            <h4>اعضا</h4>
-            <ul id="member-list" class="list-group">
-                {% for user in members %}
-                <li class="list-group-item" data-username="{{ user.username }}" onclick="sendNotification('{{ user.id }}')">
-                    {% if user.userprofile.avatar %}
-                        <img src="{{ user.userprofile.avatar.url }}" alt="Avatar" class="avatar" width="30" height="30">
-                    {% else %}
-                        <img src="{% static 'profiles/default.png' %}" alt="Default Avatar" class="avatar" width="30" height="30">
-                    {% endif %}
-                    {{ user.username }}
-                </li>
-                {% endfor %}
-            </ul>
-            <!-- فرم اضافه کردن عضو جدید -->
-            <h5 class="mt-4">اضافه کردن عضو جدید</h5>
-            <form method="post" action="{% url 'group_chat' group.slug  %}">
-                {% csrf_token %}
-                <div class="form-group">
-                    <select name="username" class="form-control">
-                        {% for user in all_users %}
-                            <option value="{{ user.username }}">{{ user.username }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <button type="submit" name="add_member" class="btn btn-success btn-block">افزودن</button>
-            </form>
-        </div>
-    </div>
+json
+{
+    "id": "5a65eac5-11ec-4147-a3d5-63c1354f9d1e",
+    "name": "arash",
+    "slug": "arash",
+    "created_by": "userCreator",
+    "type": "public",
+    "members_count": 1
+}
+```
+## 3. Add Users to Group
+**URL**: https://dev3.nargil.co/cht/api/group_chat/{GroupSlug}/
 
-    <!-- Bootstrap JS and dependencies -->
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+**Request Body**:
 
-    <script>
-        const groupSlug = "{{ group.slug }}";
-        const chatSocket = new WebSocket(
-            'ws://' + window.location.host + '/cht/ws/chat/' + groupSlug + '/'
-        );
+```json
+{
+    "add_member": true,
+    "uuid": "5c4f39fb8cc04229813f0b2b367edcff"
+}
+```
+***Response for Add:***
 
-        // WebSocket برای اعلان‌ها
-        const username = "{{ request.user.username }}"; // نام کاربری را از Django بگیرید
-        const notificationSocket = new WebSocket(
-            'ws://' + window.location.host + '/cht/ws/notifications/' + username + '/'
-        );
-        
-        // console.log(username)
-        console.log(notificationSocket)
+```json
+{
+    "message": "کاربر با نام firstname lastname به گروه arash اضافه شد.",
+    "user": {
+        "id": "5c4f39fb-8cc0-4229-813f-0b2b367edcff",
+        "nationalcode": "2240175931",
+        "first_name_fa": "firstname",
+        "last_name_fa": "lastname",
+        "usr_avatar": "https://demo.nargil.co/usr/base-user/file/3079f569e7cd4171a1de5ebc47fa52ec/"
+    }
+}
+```
+***Response for Remove:***
 
+```json
+{
+    "message": "کاربر با کد ملی 2240175931 از گروه arash حذف شد."
+}
+```
+## 4. See All Groups in which the User is a Member
+**URL**: https://dev3.nargil.co/cht/api/groups/
 
-        chatSocket.onmessage = function(e) {
-            console.log("aki",e)
-            const data = JSON.parse(e.data);
-            console.log("aki",data)
+## 5. Enter to Group
+**URL**: https://dev3.nargil.co/cht/api/groups/Arash/chat/
 
-            const chatLog = document.querySelector('#chat-log');
-            
-            if (data.message) {
-                const currentTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Tehran' });
-                const newMessage = document.createElement('div');
-                newMessage.classList.add('message');
-                newMessage.innerHTML = 
-                    <img src="${data.avatar_url}" alt="Avatar" class="avatar" width="40" height="40">
-                    <strong class="username" data-username="${data.user}">${data.user}:</strong> ${data.message} <br>
-                    <small>${currentTime}</small>
-                ;
-                
-                chatLog.appendChild(newMessage);
-                
-                // Scroll to the bottom
-                chatLog.scrollTop = chatLog.scrollHeight;
+Response:
 
-                console.log(data.user);
-
-                
+```json
+{
+    "group": {
+        "id": "36d42b76-0229-4f73-9b44-f1db4cd05a55",
+        "name": "arash",
+        "slug": "arash",
+        "type": "public",
+        "members": [
+            {
+                "id": "4a74eda0-474b-4467-8437-2ba9b9842235",
+                "firstname": "firstname",
+                "lastname": "lastname",
+                "is_superuser": false,
+                "avatar": null
+            },
+            {
+                "id": "825fe339-0a5e-4af2-b98e-544822d3b6d5",
+                "firstname": "firstname",
+                "lastname": "firstname",
+                "is_superuser": true,
+                "avatar": "/cht/media/https%3A/demo.nargil.co/usr/base-user/file/3079f569e7cd4171a1de5ebc47fa52ec/"
             }
+        ]
+    },
+    "messages": [
+        {
+            "id": "cc7b3293-b747-44ac-aa44-22a7e15539a9",
+            "content": "",
+            "timestamp": "2024-11-13T05:11:49.926952Z",
+            "user": "11e794cc-44eb-4915-af02-524426a0bda1",
+            "user_name": "firstname",
+            "avatar": null,
+            "group": "36d42b76-0229-4f73-9b44-f1db4cd05a55",
+            "file": "/cht/media/static/files/578017"
+        },
+        {
+            "id": "784fd636-6a14-420e-8db9-f79639b10a23",
+            "content": "",
+            "timestamp": "2024-11-13T05:12:00.582337Z",
+            "user": "11e794cc-44eb-4915-af02-524426a0bda1",
+            "user_name": "firstname",
+            "avatar": null,
+            "group": "36d42b76-0229-4f73-9b44-f1db4cd05a55",
+            "file": "/cht/media/static/files/388233"
+        }
+    ],
+    "all_users": [],
+    "user_profile": {
+        "id": "4a74eda0-474b-4467-8437-2ba9b9842235",
+        "user": "11e794cc-44eb-4915-af02-524426a0bda1",
+        "first_name": "firstname",
+        "last_name": "firstname",
+        "avatar": null,
+        "is_superuser": false
+    }
+}
+```
+## 6. See All Users Information
+**URL**: https://dev3.nargil.co/cht/api/users-info/
 
-            if (data.file) {
-                const newFileMessage = document.createElement('div');
-                newFileMessage.classList.add('message');
-                newFileMessage.innerHTML = 
-                    <strong>${data.user}:</strong> <a href="${data.file}">${data.filename}</a>
-                ;
-                chatLog.appendChild(newFileMessage);
-                chatLog.scrollTop = chatLog.scrollHeight;
-            }
-    
-        };
+Response:
 
-        document.querySelector('#chat-message-input').focus();
-        document.querySelector('#chat-message-input').onkeyup = function(e) {
-            if (e.keyCode === 13) {  // Enter key
-                document.querySelector('#chat-message-submit').click();
-            }
-        };
-
-        document.querySelector('#chat-message-submit').onclick = function(e) {
-            const messageInputDom = document.querySelector('#chat-message-input');
-            const message = messageInputDom.value;
-            const fileInput = document.querySelector('#chat-file-input');
-
-            if (message || (fileInput.files.length > 0)) {
-                const dataToSend = {
-                    'message': message,
-                };
-
-                if (fileInput.files.length > 0) {
-                    const file = fileInput.files[0];
-                    const reader = new FileReader();
-
-                    reader.onloadend = function() {
-                        dataToSend.file = reader.result; // base64 encoded file
-                        dataToSend.filename = file.name; // send filename
-
-                        chatSocket.send(JSON.stringify(dataToSend));
-                    };
-
-                    reader.readAsDataURL(file); // Convert the file to base64
-                } else {
-                    chatSocket.send(JSON.stringify(dataToSend));
+```json
+{
+    "all_users": [
+        {
+            "id": "825fe339-0a5e-4af2-b98e-544822d3b6d5",
+            "firstname": "firstname",
+            "lastname": "lastname",
+            "avatar": "https://demo.nargil.co/usr/base-user/file/3079f569e7cd4171a1de5ebc47fa52ec/",
+            "is_superuser": true,
+            "groups": [
+                {
+                    "id": "36d42b76-0229-4f73-9b44-f1db4cd05a55",
+                    "name": "arash",
+                    "slug": "arash",
+                    "type": "public"
                 }
+            ]
+        },
+        {
+            "id": "4a74eda0-474b-4467-8437-2ba9b9842235",
+            "firstname": "firstname",
+            "lastname": "lastname",
+            "avatar": "https://demo.nargil.co/usr/base-user/file/4a043f140bc94a3188158890f813c266/",
+            "is_superuser": false,
+            "groups": [
+                {
+                    "id": "36d42b76-0229-4f73-9b44-f1db4cd05a55",
+                    "name": "arash",
+                    "slug": "arash",
+                    "type": "public"
+                }
+            ]
+        }
+    ]
+}
+```
+## 7. User Profile
+**URL**: https://dev3.nargil.co/cht/api/user/profile/
 
-                messageInputDom.value = '';
-                fileInput.value = ''; // Clear file input
+**Response:**
+
+```json
+{
+    "message": "User Profile Found",
+    "data": {
+        "id": "4a74eda0-474b-4467-8437-2ba9b9842235",
+        "user": "11e794cc-44eb-4915-af02-524426a0bda1",
+        "first_name": "firstname",
+        "last_name": "lastname",
+        "avatar": null,
+        "is_superuser": false
+    }
+}
+```
+***If Superuser, you can fetch all profiles:***
+
+***Request Parameter: get-all=true***
+
+**Response:**
+
+```json
+{
+    "message": "All User Profiles Retrieved",
+    "data": [
+        {
+            "id": "4a74eda0-474b-4467-8437-2ba9b9842235",
+            "user": "11e794cc-44eb-4915-af02-524426a0bda1",
+            "first_name": "firstname",
+            "last_name": "lastname",
+            "avatar": null,
+            "is_superuser": false
+        },
+        {
+            "id": "825fe339-0a5e-4af2-b98e-544822d3b6d5",
+            "user": "5c4f39fb-8cc0-4229-813f-0b2b367edcff",
+            "first_name": "firstname",
+            "last_name": "lastname",
+            "avatar": "/cht/media/https%3A/demo.nargil.co/usr/base-user/file/3079f569e7cd4171a1de5ebc47fa52ec/",
+            "is_superuser": true
+        }
+    ]
+}
+```
+## 8. Private Message
+**URL**: https://dev3.nargil.co/cht/api/private-chat/{pv_group_name}/
+
+**Response:**
+
+```json
+{
+    "private_group": {
+        "id": "df6ca747-e704-44b2-952d-0cb3af5d5973",
+        "name": "private_chat_admin_user",
+        "slug": "private_chat_admin_user",
+        "members": [
+            {
+                "id": "11e794cc-44eb-4915-af02-524426a0bda1"
+            },
+            {
+                "id": "5c4f39fb-8cc0-4229-813f-0b2b367edcff"
             }
-        };
-
-        document.querySelector('#chat-file-input').onchange = function(e) {
-            const file = e.target.files[0];
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                chatSocket.send(JSON.stringify({
-                    'file': event.target.result,
-                    'filename': file.name,
-                }));
-            };
-            reader.readAsDataURL(file);
-        };
-        
-    
-
-        //emoji
-        document.getElementById('emoji-button').onclick = function() {
-        const emojiList = document.getElementById('emoji-list');
-        emojiList.style.display = emojiList.style.display === 'none' ? 'block' : 'none';
-        };
-
-        const emojis = document.querySelectorAll('.emoji');
-        emojis.forEach(emoji => {
-            emoji.onclick = function() {
-                const messageInput = document.querySelector('#chat-message-input');
-                messageInput.value += emoji.getAttribute('data-emoji'); // افزودن اموجی به ورودی
-                document.getElementById('emoji-list').style.display = 'none'; // بستن لیست اموجی‌ها
-                messageInput.focus(); // فوکوس روی ورودی
-            };
-        });
-        //emoji
+        ]
+    },
+    "messages": [
+        {
+            "id": "fb973c98-c7c4-4f96-9d06-3782ac23a9fb",
+            "content": "hello",
+            "timestamp": "2024-11-13T06:42:22.734742Z",
+            "user": "11e794cc-44eb-4915-af02-524426a0bda1",
+            "user_name": "firstname",
+            "avatar": null,
+            "group": "df6ca747-e704-44b2-952d-0cb3af5d5973"
+        }
+    ]
+}
+```
 
 
-        // اضافه کردن event listener به نام کاربری
-        document.querySelectorAll('#member-list .list-group-item').forEach(item => {
-            item.onclick = function() {
-                const link = this.querySelector('.user-link').href; // دریافت URL چت خصوصی
-                window.location.href = link; // هدایت به چت خصوصی
-            };
-        });
 
+# WebSocket Documentation
 
-        console.log("ta injas");
-        // برای دریافت پیام‌ها از WebSocket اعلان
-        notificationSocket.onmessage = function(e) {
-            const notificationData = JSON.parse(e.data);
-            // console.log("Notification received:", notificationData); // نمایش اطلاعات دریافت شده
+## Public Group WebSocket
+**URL**: `wss://dev3.nargil.co/cht/ws/chat/arash/`
 
-            // بررسی نوع اعلان و پردازش آن
-            if (notificationData.test === 'pv') {
-                console.log("New notification:", notificationData); // اطلاعات اعلان جدید را در کنسول نمایش دهید
-                // alert(پیام جدید از ${notificationData.sender}: ${notificationData.message});
-                Swal.fire({
-                    title: دعوت به چت خصوصی از طرف ${notificationData.sender},
-                    text: "آیا می‌خواهید به چت خصوصی وارد شوید؟",
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'بله، وارد شوید',
-                    cancelButtonText: 'خیر'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        // print(window.location.host)
-                        // کاربر درخواست را تایید کرده و به صفحه چت خصوصی هدایت می‌شود
-                        const chatUrl = '/cht/chat/private/'+ notificationData.sender +'/';
+### Sending a Message
+**Message Format**:
+```json
+{
+    "message": "hello",
+    "avatar_url": "/media/avatars/template_0_FZzDUpq.jpg",
+    "timestamp": "2024-11-03 08:04:40"
+}
+```
+**Sending a File**
+***Message Format:***
 
-                        window.location.href = chatUrl;
-                        
-                    }
-                });
-            }
-        };
-       
-    </script>
-</body>
-</html>
+```json
+{
+    "file": "Base64 Format Only",
+    "filename": "filename",
+    "avatar_url": "/media/avatars/template_0_FZzDUpq.jpg",
+    "timestamp": "2024-11-03 08:04:40"
+}
+```
+## Private Group WebSocket
+**URL**: wss://dev3.nargil.co/cht/ws/private_chat/{private_chat_url}/
+
+**Sending a Message**
+***Message Format:***
+
+```json
+{
+    "message": "Message of User",
+    "recipient": "User UUID Only"
+}
+```
+**Sending a File**
+***Message Format:***
+
+```json
+{
+    "file": "Base64 Format Only",
+    "filename": "files",
+    "recipient": "User UUID Only"
+}
+```
