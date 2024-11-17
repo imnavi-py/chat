@@ -165,11 +165,37 @@ class PrivateGroupMemberSerializer(serializers.ModelSerializer):
 class PrivateGroupSerializer(serializers.ModelSerializer):
     members = MemberSerializer(many=True, read_only=True)
     messages = serializers.SerializerMethodField()
+    # sender = serializers.SerializerMethodField()
+    # recipient = serializers.SerializerMethodField()
+    private_with = serializers.SerializerMethodField()
+    # priv_with =  
 
     class Meta:
         model = PrivateGroup
-        fields = ['id', 'name', 'slug', 'members', 'messages']
+        fields = ['id', 'name', 'slug', 'members', 'messages', 'private_with']
 
     def get_messages(self, obj):
         messages = PrivateMessage.objects.filter(pvgroup=obj).order_by('timestamp')
         return PrivateMessageSerializer(messages, many=True).data
+
+    def get_private_with(self, obj):
+        # گیرنده به صورت `target_user` ذخیره شده است
+        priv_with = ""
+        recipient = obj.target_user
+        sender = obj.created_by
+        recipient = obj.target_user
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            print("this is :", request.user.id)
+            if sender.id == request.user.id:
+                priv_with = recipient
+            else:
+                priv_with = sender
+            
+        print("no")
+        return {
+
+            "id": priv_with.id,
+            "full_name": f"{priv_with.first_name_fa} {priv_with.last_name_fa}",
+            "avatar": priv_with.usr_avatar,  # اگر avatar در BaseUser ذخیره شده است
+        }
