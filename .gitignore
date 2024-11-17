@@ -94,7 +94,7 @@ celerybeat-schedule
 *cms/cron.py
 *cms/cron2.py
 *cms/cron_min.py
-# **/*.zip
+**/*.zip
 **/*.sql
 *env_debug_and_database.py
 /__pycache__
