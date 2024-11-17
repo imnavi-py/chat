@@ -108,9 +108,9 @@ class GroupSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'slug', 'type', 'members']# حذف members_names چون اطلاعاتش در MemberSerializer است
 
 class GroupChatSerializer(serializers.Serializer):
-    group = GroupSerializer()
+    group = GroupSerializer()  # استفاده از GroupSerializer به جای group = Group
     messages = MessageSerializer(many=True)
-    all_users = serializers.PrimaryKeyRelatedField(many=True, queryset=User.objects.all())
+    all_users = serializers.PrimaryKeyRelatedField(many=True, queryset=BaseUser.objects.all())
     user_profile = UserProfileSerializer()
 
     def get_all_users_names(self, obj):
@@ -118,16 +118,24 @@ class GroupChatSerializer(serializers.Serializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        representation['members'] = [MemberSerializer(member).data for member in instance.members.all()]
+        
+        # اصلاح: از داده‌های instance برای دریافت اطلاعات group استفاده کنید
+        group = instance.get('group')  # گروه به درستی به این فیلد اختصاص داده شده باشد
+
+        if group:
+            messages = Message.objects.filter(group=group).order_by('timestamp')
+            representation['messages'] = MessageSerializer(messages, many=True).data
+            representation['members'] = [MemberSerializer(member).data for member in group.members.all()]
+        
         return representation
     
 ## Private Group
 
 class PrivateMessageSerializer(serializers.ModelSerializer):
-    sender_name = serializers.CharField(source='sender.first_name_fa', read_only=True)
-    sender_avatar = serializers.ImageField(source='sender.userprofile.avatar', read_only=True)
-    recipient_name = serializers.CharField(source='recipient.first_name_fa', read_only=True)
-    recipient_avatar = serializers.ImageField(source='recipient.userprofile.avatar', read_only=True)
+    sender_full_name = serializers.SerializerMethodField()
+    sender_avatar = serializers.CharField(source='sender.userprofile.avatar', read_only=True)
+    recipient_full_name = serializers.SerializerMethodField()
+    recipient_avatar = serializers.CharField(source='recipient.userprofile.avatar', read_only=True)
 
     # اصلاح فیلدهای sender و recipient برای تبدیل شناسه به شیء BaseUser
     sender = serializers.PrimaryKeyRelatedField(queryset=BaseUser.objects.all(), required=True)
@@ -136,8 +144,13 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PrivateMessage
-        fields = ['id', 'content', 'timestamp', 'sender', 'sender_name', 'sender_avatar', 
-                  'recipient', 'recipient_name', 'recipient_avatar', 'file', 'pvgroup']
+        fields = ['id', 'content', 'timestamp', 'sender', 'sender_full_name', 'sender_avatar', 
+                  'recipient', 'recipient_full_name', 'recipient_avatar', 'file', 'pvgroup']
+    def get_sender_full_name(self, obj):
+        return f"{obj.sender.first_name_fa} {obj.sender.last_name_fa}"
+
+    def get_recipient_full_name(self, obj):
+        return f"{obj.recipient.first_name_fa} {obj.recipient.last_name_fa}"
 
 class PrivateGroupMemberSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)

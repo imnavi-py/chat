@@ -2,6 +2,7 @@ import base64
 from datetime import timezone
 import os
 import random
+import uuid
 from venv import logger
 from channels.generic.websocket import AsyncWebsocketConsumer
 import json
@@ -11,6 +12,7 @@ from django.contrib.auth import get_user_model
 from asgiref.sync import async_to_sync
 from asgiref.sync import sync_to_async
 from django.utils.text import slugify
+import redis
 
 
 
@@ -26,6 +28,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
 
 
     async def connect(self):
+        self.group_slug = self.scope['url_route']['kwargs']['group_slug']
         # استخراج توکن از هدر یا کوکی
         self.token = self.extract_token_from_headers_or_cookies()
 
@@ -106,10 +109,13 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 {
                     'type': 'chat_message',
                     'message': message,
-                    'firstname': self.user.first_name_fa,
-                    'lastname': self.user.last_name_fa,
+                    # 'firstname': self.user.first_name_fa,
+                    # 'lastname': self.user.last_name_fa,
+                    'user_name': self.user.first_name_fa + " " + self.user.last_name_fa,
                     'avatar_url': user_avatar_url,
                     'timestamp': timestamp.isoformat(),  # تبدیل شیء datetime به رشته ISO 8601
+                    'file': '',
+                    'filename': ''
                 }
             )
 
@@ -117,6 +123,8 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             file_content = data['file']
             original_filename = data['filename']
             saved_filename = await self.save_file(file_content, original_filename)
+            timestamp = self.get_current_time()
+            user_avatar_url = await self.get_user_avatar()
 
             # Save the file path in the database
             await self.save_message('', self.get_current_time(), saved_filename)  # Empty message for file uploads
@@ -126,10 +134,13 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 self.group_slug,
                 {
                     'type': 'chat_file',
+                    'message': '',
                     'file': f"{settings.MEDIA_URL}{saved_filename}",  # Updated URL for file
                     'filename': saved_filename,
-                    'firstname': self.user.first_name_fa,
-                    'lastname': self.user.last_name_fa,
+                    'user_name': self.user.first_name_fa + " " + self.user.last_name_fa,
+                    'avatar_url': user_avatar_url,
+                    'timestamp': timestamp.isoformat(),  # تبدیل شیء datetime به رشته ISO 8601
+                    
                 }
             )
         
@@ -176,34 +187,45 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
 
 
     async def chat_message(self, event):
-        message = event['message']
-        firstname = event['firstname'] ,
-        lastname = event['firstname'] ,
-        avatar_url = event['avatar_url']
-        timestamp = event['timestamp']  # دریافت زمان
+        message = event['message'],
+        # firstname = event['firstname'] ,
+        # lastname = event['lastname'] ,
+        user_name = event['user_name'],
+        avatar_url = event['avatar_url'],
+        timestamp = event['timestamp'],  # دریافت زمان
+        file = ''
+        filename = ''
 
         # ارسال پیام به وب‌ساکت
         await self.send(text_data=json.dumps({
             # 'type': 'chat_message',
-            'message': message,
-            'firstname': firstname,
-            'lastname': lastname,
-            'avatar_url': avatar_url,
-            'timestamp': timestamp # فرمت تاریخ میلادی
+            'message': message[0],
+            # 'firstname': firstname,
+            # 'lastname': lastname,
+            'user_name': user_name[0],
+            'avatar_url': avatar_url[0],
+            'timestamp': timestamp[0], # فرمت تاریخ میلادی
+            'file': file,
+            'filename': filename
         }))
 
     async def chat_file(self, event):
         file_url = event['file']
         filename = event['filename']
-        firstname = event['firstname'] ,
-        lastname = event['firstname'] ,
+        user_name = self.user.first_name_fa + " " + self.user.last_name_fa,
+        avatar_url = event['avatar_url'],
+        message = event['message'],
+        timestamp = event['timestamp'],  # دریافت زمان
 
         # Send file information to WebSocket
         await self.send(text_data=json.dumps({
             'file': file_url,
             'filename': filename,
-            'firstname': firstname,
-            'lastname': lastname,
+            'user_name': user_name[0],
+            'avatar_url': avatar_url[0],
+            'message': message[0],
+            'timestamp': timestamp[0], # فرمت تاریخ میلادی
+
         }))
 
     
@@ -598,33 +620,114 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
 
 
 class NotificationConsumer(AsyncWebsocketConsumer):
+    # لیست کاربران آنلاین به صورت کلاس
+    online_users = {}
+
     async def connect(self):
         self.username = self.scope['url_route']['kwargs']['username']
-        self.room_group_name = f'notifications_{self.username}'
-        
-        await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
+        self.room_group_name = f'{self.username}'
 
-        await self.accept()
+        # استخراج توکن از هدر یا کوکی
+        self.token = self.extract_token_from_headers_or_cookies()
+
+        if not self.token:
+            await self.close()
+            return
+
+        # احراز هویت کاربر با استفاده از توکن و بازیابی اطلاعات او
+        self.user = await self.get_user_from_token(self.token)
+
+        if self.user is not None:
+            print(f"User connected: {self.user.first_name_fa} {self.user.last_name_fa}")
+
+            # ذخیره UUID و توکن کاربر در لیست آنلاین‌ها
+            self.user_uuid = str(self.user.id)
+            self.user_namefa= str(self.user.last_name_fa)  # فرض کنید UUID کاربر در `user.uuid` ذخیره شده است
+            NotificationConsumer.online_users[self.user_uuid] = {'channel_name': self.channel_name, 'lastname': self.user_namefa}
+
+            await self.channel_layer.group_add(
+                self.username,
+                self.channel_name
+            )
+
+            # تایید اتصال سوکت
+            await self.accept()
+
+            # ارسال لیست آنلاین‌ها پس از تایید اتصال
+            await self.update_online_users()
+
+        else:
+            print("Invalid token or user not authenticated")
+            await self.close()
 
     async def disconnect(self, close_code):
+        # حذف UUID کاربر از لیست آنلاین‌ها هنگام قطع ارتباط
+        if hasattr(self, 'user_uuid'):
+            del NotificationConsumer.online_users[self.user_uuid]
+
+        # ارسال به روز رسانی لیست آنلاین‌ها به کاربران متصل
+        await self.update_online_users()
+
+        # ارسال پیام به بقیه کاربران که کاربر از سوکت قطع شده است
+        await self.send_to_all_users(f'{self.user.first_name_fa} {self.user.last_name_fa} has disconnected.')
+
+        # حذف کاربر از گروه
         await self.channel_layer.group_discard(
-            self.room_group_name,
+            self.username,
             self.channel_name
         )
+
+    async def update_online_users(self):
+        # ارسال لیست UUID کاربران آنلاین همراه با توکن‌ها و تعداد کاربران آنلاین
+        online_users = []
+        for user_uuid, data in NotificationConsumer.online_users.items():
+            online_users.append({
+                'uuid': user_uuid,
+                'lastname': data['lastname']
+            })
+
+        # تعداد کاربران آنلاین
+        online_count = len(NotificationConsumer.online_users)
+
+        # ارسال پیام به تمام کاربران متصل
+        await self.channel_layer.group_send(
+            self.username,  # ارسال به گروه مربوط به این کاربر
+            {
+                'type': 'send_online_users',
+                'online_users': online_users,
+                'online_count': online_count
+            }
+        )
+
+    async def send_online_users(self, event):
+        # این متد به تمام کاربرانی که به گروه متصل هستند، داده‌های آنلاین را ارسال می‌کند
+        await self.send(text_data=json.dumps({
+            'online_users': event['online_users'],
+            'online_count': event['online_count']
+        }))
 
     async def receive(self, text_data):
         data = json.loads(text_data)
         message = data['message']
-        sender = data['sender']
+        sender = self.user.first_name_fa + " " + self.user.last_name_fa
         recipient = data['recipient']
         title = data['title']
+        
 
         result = ""
+        rec_id = None  # مقدار پیش‌فرض برای rec_id
+
         if title == 'private_msg':
             result = "pv"
+            # بررسی اینکه recipient یک UUID معتبر است
+            try:
+                # تبدیل recipient به UUID برای بررسی صحت آن
+                recipient_uuid = uuid.UUID(recipient)
+                rec_id = str(recipient_uuid)  # تبدیل UUID به رشته
+            except ValueError:
+                # اگر recipient قابل تبدیل به UUID نباشد، rec_id را None نگه می‌داریم
+                rec_id = None
+            
             # ارسال پیام hello به کاربر خاص
             await self.send_to_all_users(result)
         else:
@@ -638,7 +741,9 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 'message': message,
                 'sender': sender,
                 'recipient': recipient,
-                'title': result
+                'title': result,
+                'avatar_url': await self.get_user_avatar(),
+                'rec_id':rec_id
             }
         )
 
@@ -647,12 +752,20 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         sender = event.get("sender")
         recipient = event.get("recipient", None)  # استفاده از get برای جلوگیری از خطا
         title = event.get("title")
+        user_avatar_url = await self.get_user_avatar()
+
+        # تبدیل رشته rec_id به UUID در سمت گیرنده
+        rec_id = uuid.UUID(event.get("rec_id")) if event.get("rec_id") else None
+
         if recipient:
+            rec_id_str = str(event.get("rec_id"))
             await self.send(text_data=json.dumps({
                 "message": message,
                 "sender": sender,
                 "recipient": recipient,
-                "title": title
+                "title": title,
+                "avatar_url": user_avatar_url,
+                "rec_id": rec_id_str  # ارسال UUID به عنوان rec_id
             }))
 
     async def send_to_all_users(self, message):
@@ -666,3 +779,156 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 'title': 'hello'  # یا هر مقداری که لازم است
             }
         )
+
+    
+    @database_sync_to_async
+    def get_user_avatar(self):
+        # دریافت آواتار کاربر
+        if self.user:
+            print("url avatar", self.user.userprofile.avatar)
+            return self.user.usr_avatar if self.user.usr_avatar else '/static/profiles/default.png'
+        return '/static/profiles/default.png'
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    def extract_token_from_headers_or_cookies(self):
+        # بررسی هدر 'authorization' برای استخراج توکن
+        token = None
+        for header in self.scope['headers']:
+            if header[0] == b'authorization':
+                token = header[1].decode().split()[0]  # فرض بر این است که توکن به صورت 'Bearer <TOKEN>' است
+                break
+
+        # اگر توکن از هدر پیدا نشد، از کوکی‌ها جستجو می‌کنیم
+        if not token:
+            cookies = self.scope.get('cookies', {})
+            token = cookies.get('token')  # فرض کنید توکن در کوکی به نام 'token' ذخیره شده باشد
+
+        print(f"Token extracted: {token}")  # پرینت توکن استخراج شده
+        return token
+
+    @database_sync_to_async
+    def get_user_from_token(self, token):
+        from chat.models import BaseUser
+
+        try:
+            # جستجوی کاربر با استفاده از توکن
+            user = BaseUser.objects.get(token=token)
+            print(f"User found with token: {user.first_name_fa} {user.last_name_fa}")  # پرینت نام کاربر
+            return user
+        except BaseUser.DoesNotExist:
+            print("No user found with the given token")  # پرینت زمانی که کاربر یافت نشود
+            return None
+
+    @database_sync_to_async
+    def mark_online(self):
+        # ذخیره کانال کاربر در مجموعه آنلاین‌ها در Redis
+        redis_client = redis.StrictRedis(host='172.40.11.10', port=6379, db=0, decode_responses=True)
+        redis_client.sadd('online_users', self.channel_name)  # اضافه کردن کانال به مجموعه آنلاین‌ها
+
+    @database_sync_to_async
+    def get_online_users_from_redis(self):
+        # دریافت لیست کاربران آنلاین از Redis
+        redis_client = redis.StrictRedis(host='172.40.11.10', port=6379, db=0, decode_responses=True)
+        online_users = redis_client.smembers('online_users')  # اعضای مجموعه آنلاین‌ها
+        return list(online_users)
+
+    @database_sync_to_async
+    def get_online_user_count(self):
+        # شمارش تعداد کاربران آنلاین در Redis
+        redis_client = redis.StrictRedis(host='172.40.11.10', port=6379, db=0, decode_responses=True)
+        online_user_count = redis_client.scard('online_users')  # تعداد اعضای مجموعه آنلاین‌ها
+        return online_user_count
+
+    # async def update_online_users(self):
+    #     # ارسال لیست UUID کاربران آنلاین همراه با توکن‌ها
+    #     online_users = []
+    #     for user_uuid, data in NotificationConsumer.online_users.items():
+    #         online_users.append({
+    #             'uuid': user_uuid,
+    #             'token': data['token']
+    #         })
+    #     await self.send(text_data=json.dumps({
+    #         'online_users': online_users
+    #     }))
+
+    
+
+    # async def update_online_users(self):
+    #     # دریافت لیست کاربران آنلاین از Redis
+    #     online_users = await self.get_online_users_from_redis()
+
+    #     # شمارش تعداد کاربران آنلاین
+    #     online_user_count = await self.get_online_user_count()
+
+    #     # ارسال لیست آنلاین‌ها و تعداد کاربران آنلاین به کاربر
+    #     await self.send(text_data=json.dumps({
+    #         "online_users": online_users,
+    #         "online_user_count": online_user_count  # ارسال تعداد کاربران آنلاین
+    #     }))
+
+    # @database_sync_to_async
+    # def add_user_to_online_list(self):
+    #     # اضافه کردن کاربر به لیست آنلاین‌ها در Redis
+    #     redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
+    #     redis_client.sadd('online_users', self.username)
+
+    # @database_sync_to_async
+    # def remove_user_from_online_list(self):
+    #     # حذف کاربر از لیست آنلاین‌ها در Redis
+    #     redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
+    #     redis_client.srem('online_users', self.username)
+
+    # @database_sync_to_async
+    # def get_online_users_from_redis(self):
+    #     # دریافت لیست کاربران آنلاین از Redis
+    #     redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
+    #     online_users = redis_client.smembers('online_users')
+    #     return list(online_users)
+
+    # def extract_token_from_headers_or_cookies(self):
+    #     # بررسی هدر 'authorization' برای استخراج توکن
+    #     token = None
+    #     for header in self.scope['headers']:
+    #         if header[0] == b'authorization':
+    #             token = header[1].decode().split()[0]  # فرض بر این است که توکن به صورت 'Bearer <TOKEN>' است
+    #             break
+
+    #     # اگر توکن از هدر پیدا نشد، از کوکی‌ها جستجو می‌کنیم
+    #     if not token:
+    #         cookies = self.scope.get('cookies', {})
+    #         token = cookies.get('token')  # فرض کنید توکن در کوکی به نام 'token' ذخیره شده باشد
+
+    #     return token
+
+    # @database_sync_to_async
+    # def get_user_from_token(self, token):
+    #     from chat.models import BaseUser
+
+    #     try:
+    #         user = BaseUser.objects.get(token=token)
+    #         return user
+    #     except BaseUser.DoesNotExist:
+    #         return None
+        
+    # @database_sync_to_async
+    # def get_online_user_count(self):
+    #     # شمارش تعداد کاربران آنلاین در Redis
+    #     redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
+    #     online_user_count = redis_client.scard('online_users')  # تعداد اعضای مجموعه آنلاین‌ها
+        # return online_user_count
